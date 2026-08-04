@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- The connector, because that is what the product is about. Two pins lit
+       in the bus colours: CAN High yellow, CAN Low green. Ground is the
+       sales palette's deep green so the icon matches the app it opens. -->
+  <rect width="512" height="512" rx="112" fill="#14201B"/>
+  <path d="M96 168 H416 L392 344 H120 Z" fill="none" stroke="#3E5449" stroke-width="14"/>
+  <circle cx="150" cy="214" r="20" fill="#26362E"/>
+  <circle cx="212" cy="214" r="20" fill="#D9A017"/>
+  <circle cx="274" cy="214" r="20" fill="#26362E"/>
+  <circle cx="336" cy="214" r="20" fill="#26362E"/>
+  <circle cx="158" cy="300" r="20" fill="#26362E"/>
+  <circle cx="220" cy="300" r="20" fill="#2E9160"/>
+  <circle cx="282" cy="300" r="20" fill="#26362E"/>
+  <circle cx="344" cy="300" r="20" fill="#26362E"/>
+</svg>

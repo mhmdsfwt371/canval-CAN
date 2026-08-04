@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14201B">
+<title>هل السيارة دي مدعومة؟</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="canval">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ---------------------------------------------------------------------------
+   Read by someone on a call with a customer, not by an engineer at a truck.
+   Everything follows from that:
+     - the verdict is the largest thing on the page, because it is the question
+     - the sendable answer sits right under it, because it is what the work
+       actually produces
+     - identifiers, device counts and bus numbers are folded away, because a
+       screenshot of this screen can land in a customer's inbox and those
+       numbers belong to other customers
+--------------------------------------------------------------------------- */
+:root{
+  --paper:#F2F4F1; --card:#FFFFFF; --ink:#14201B; --soft:#5C6B64;
+  --rule:#DDE3DE; --line:#C8D2CB;
+  --yes:#1B6B47; --yes-bg:#E8F2EC;
+  --part:#8A6011; --part-bg:#FBF1DE;
+  --no:#9E4126;  --no-bg:#F8EAE5;
+  --shadow:0 1px 0 rgba(20,32,27,.05), 0 10px 30px -22px rgba(20,32,27,.55);
+  --bar:78px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--paper); color:var(--ink);
+  font:400 16px/1.65 "IBM Plex Sans Arabic",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;
+  padding-bottom:calc(var(--bar) + env(safe-area-inset-bottom));
+}
+h1,h2,h3{margin:0;font-weight:700}
+button,input{font:inherit;color:inherit}
+:focus-visible{outline:2.5px solid var(--ink);outline-offset:2px;border-radius:4px}
+.wrap{max-width:720px;margin:0 auto;padding:0 16px}
+.ltr{direction:ltr;unicode-bidi:isolate;display:inline-block}
+
+header{background:var(--card);border-bottom:1px solid var(--rule)}
+.mast{display:flex;align-items:center;gap:10px;padding:15px 0}
+.mark{font-weight:700;font-size:18px}
+.mark b{color:var(--yes)}
+.tag{font-size:13px;color:var(--soft)}
+
+/* A result replaces the pickers, so without this there is no way back to
+   the choice that produced it -- on a phone the browser's own back button
+   leaves the page entirely. */
+.back{
+  margin-inline-start:auto;display:none;align-items:center;gap:6px;
+  padding:7px 13px;border:1px solid var(--line);border-radius:9px;
+  background:var(--card);font-size:14px;font-weight:500;cursor:pointer;
+}
+.back.on{display:inline-flex}
+.back:hover{border-color:var(--ink)}
+.back span{font-size:15px;line-height:1}
+
+.ask{
+  position:fixed;inset-inline:0;bottom:0;z-index:20;background:var(--card);
+  border-top:1px solid var(--rule);
+  padding:12px 16px calc(12px + env(safe-area-inset-bottom));
+}
+.ask form{max-width:720px;margin:0 auto;display:flex;gap:8px}
+.ask .field{flex:1;min-width:0;position:relative}
+.ask .field input{width:100%}
+
+/* Suggestions. The catalogue holds thousands of files and a make alone can
+   match dozens, so the tool offers what it found and the person picks. It
+   does not choose for them: naming the wrong model family here becomes a
+   wrong promise to a customer. */
+.sugg{
+  position:absolute;inset-inline:0;bottom:calc(100% + 8px);z-index:30;
+  background:var(--card);border:1px solid var(--line);border-radius:12px;
+  box-shadow:0 -8px 30px -16px rgba(20,32,27,.6);overflow:hidden;
+  max-height:52vh;overflow-y:auto;
+}
+.sugg:empty{display:none}
+.sugg-head{
+  padding:9px 14px;font-size:12px;color:var(--soft);
+  background:var(--paper);border-bottom:1px solid var(--rule);
+}
+.sugg button{
+  display:block;width:100%;text-align:start;padding:12px 14px;border:0;
+  background:none;cursor:pointer;border-bottom:1px solid var(--rule);
+}
+.sugg button:last-child{border-bottom:0}
+.sugg button:hover,.sugg button[aria-selected="true"]{background:var(--yes-bg)}
+.sg-name{font-weight:600;font-size:15.5px;direction:ltr;unicode-bidi:isolate;
+  display:block;text-align:start}
+.sg-meta{margin-top:3px;font-size:12.5px;color:var(--soft);
+  display:flex;gap:10px;flex-wrap:wrap}
+.sg-fit{color:var(--yes);font-weight:500}
+.sg-new{color:var(--part)}
+@media (min-width:720px){
+  .sugg{bottom:auto;top:calc(100% + 8px);box-shadow:0 12px 30px -18px rgba(20,32,27,.6)}
+}
+.ask input{flex:1;min-width:0;padding:14px 15px;border:1.5px solid var(--line);
+  border-radius:11px;background:var(--paper)}
+.ask button{padding:0 22px;border:0;border-radius:11px;background:var(--yes);
+  color:#fff;font-weight:600;cursor:pointer;white-space:nowrap}
+.ask button:active{transform:translateY(1px)}
+
+main{padding:22px 0 30px}
+.card{background:var(--card);border:1px solid var(--rule);border-radius:16px;
+  box-shadow:var(--shadow);margin-bottom:18px;overflow:hidden}
+
+.head{padding:26px 22px 22px;text-align:center}
+.head.yes{background:var(--yes-bg)}
+.head.part{background:var(--part-bg)}
+.head.no{background:var(--no-bg)}
+.big{font-size:30px;line-height:1.3;font-weight:700}
+.head.yes .big{color:var(--yes)}
+.head.part .big{color:var(--part)}
+.head.no .big{color:var(--no)}
+.sub{margin-top:8px;font-size:15px;color:var(--soft)}
+.veh{margin-top:14px;padding-top:14px;border-top:1px solid rgba(20,32,27,.1);
+  font-size:17px;font-weight:600}
+.veh small{display:block;font-weight:400;font-size:13.5px;color:var(--soft);margin-top:3px}
+
+.sec{padding:20px 22px;border-top:1px solid var(--rule)}
+.sec h3{font-size:14px;margin-bottom:13px;display:flex;align-items:center;gap:9px}
+.n{font:500 12px/1 "IBM Plex Mono",monospace;background:var(--paper);
+  border:1px solid var(--rule);border-radius:7px;padding:3px 7px;color:var(--soft)}
+ul.list{list-style:none;margin:0;padding:0;display:grid;gap:9px}
+ul.list li{display:flex;align-items:flex-start;gap:10px;font-size:15.5px;line-height:1.5}
+.b{flex:none;width:18px;height:18px;border-radius:5px;margin-top:3px;
+  display:grid;place-items:center;font-size:11px;font-weight:700}
+.b.y{background:var(--yes-bg);color:var(--yes)}
+.b.n{background:var(--no-bg);color:var(--no)}
+.b.q{background:var(--paper);color:var(--soft);border:1px solid var(--rule)}
+.en{direction:ltr;unicode-bidi:isolate;font:400 12px "IBM Plex Mono",monospace;
+  color:var(--soft);display:block;margin-top:1px}
+.hint{margin-top:11px;color:var(--soft);font-size:13.5px;line-height:1.6}
+
+.send{padding:20px 22px;border-top:1px solid var(--rule);background:#FAFBFA}
+.send h3{font-size:14px;margin-bottom:12px}
+.msg{background:var(--card);border:1px solid var(--line);border-radius:12px;
+  padding:16px 17px;font-size:15px;line-height:1.9;white-space:pre-wrap}
+.copy{margin-top:12px;width:100%;padding:14px;border:0;border-radius:11px;
+  background:var(--ink);color:#fff;font-weight:600;cursor:pointer}
+.copy.done{background:var(--yes)}
+
+details{border-top:1px solid var(--rule)}
+summary{padding:15px 22px;cursor:pointer;font-size:14px;color:var(--soft);
+  list-style:none;display:flex;align-items:center;gap:8px}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"▾";margin-inline-start:auto}
+details[open] summary::after{content:"▴"}
+.tech{padding:0 22px 20px;font-size:13.5px;line-height:1.9}
+.tech .row{display:flex;gap:10px;border-bottom:1px dashed var(--rule);padding:5px 0}
+.tech .row span:first-child{color:var(--soft);min-width:120px}
+.mono{direction:ltr;unicode-bidi:isolate;font:400 13px "IBM Plex Mono",monospace}
+.devs{margin-top:12px;border-top:1px solid var(--rule);padding-top:11px}
+.devs h5{margin:0 0 4px;font-size:13px;font-weight:600}
+.devs p{margin:0 0 9px;font-size:12.5px;color:var(--soft);line-height:1.6}
+.dev{
+  display:flex;align-items:center;gap:10px;padding:7px 0;
+  border-bottom:1px dashed var(--rule);font-size:13px;
+}
+.dev:last-child{border-bottom:0}
+.dev code{
+  direction:ltr;unicode-bidi:isolate;font:400 13px "IBM Plex Mono",monospace;
+  background:var(--paper);padding:3px 7px;border-radius:6px;
+}
+.dev .n{margin-inline-start:auto;color:var(--soft);font-size:12px;flex:none}
+.dev button{
+  border:0;background:none;color:var(--yes);font-size:12.5px;cursor:pointer;
+  text-decoration:underline;padding:0;flex:none;
+}
+
+.empty{text-align:center;padding:58px 20px 42px}
+.empty .q{font-size:25px;font-weight:700;line-height:1.4;max-width:18ch;margin:0 auto}
+.empty p{color:var(--soft);margin:13px auto 0;max-width:32ch;font-size:15px}
+/* The makes this fleet actually runs. An empty box tells a salesperson
+   nothing; this is both a starting point and a useful fact about the
+   estate, pulled from the database rather than written by hand. */
+.makes{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:22px}
+.chip{
+  padding:9px 14px;border:1px solid var(--line);border-radius:999px;
+  background:var(--card);font-size:14.5px;cursor:pointer;
+  display:inline-flex;align-items:baseline;gap:7px;
+}
+.chip:hover{border-color:var(--ink)}
+.chip b{font-weight:600;direction:ltr;unicode-bidi:isolate}
+.chip i{font-style:normal;font:400 12px "IBM Plex Mono",monospace;color:var(--soft)}
+
+/* What became supported since the last sync. Xirgo add files continuously
+   and nobody was going to diff a 3934-row catalogue by hand. */
+.fresh{
+  margin:26px auto 0;max-width:520px;text-align:start;
+  border:1px solid var(--rule);border-radius:14px;background:var(--card);
+  overflow:hidden;
+}
+.fresh h4{
+  margin:0;padding:12px 16px;font-size:13px;font-weight:600;
+  background:var(--part-bg);color:var(--part);
+  display:flex;align-items:center;gap:8px;
+}
+.fresh h4 span{margin-inline-start:auto;font:500 11px "IBM Plex Mono",monospace}
+.fresh button{
+  display:block;width:100%;text-align:start;border:0;background:none;
+  padding:11px 16px;border-top:1px solid var(--rule);cursor:pointer;
+}
+.fresh button:hover{background:var(--paper)}
+.fresh .fn{font-weight:600;font-size:15px;direction:ltr;unicode-bidi:isolate;
+  display:block;text-align:start}
+.fresh .fm{font-size:12.5px;color:var(--soft);margin-top:2px}
+.synced{margin-top:14px;font-size:12px;color:var(--soft)}
+
+/* ---------------------------------------------------------------------------
+   Three pickers in a row: make, model, year. Side by side rather than
+   stacked so the whole choice is visible at once -- on a phone a stacked
+   flow hides step one by the time you reach step three, and someone who
+   cannot see what they picked stops trusting what comes back.
+
+   Each opens a panel with a search box and checkboxes, because a fleet
+   buyer asks about several vehicles in one breath: "we run MAN and
+   Scania, what do you cover?" is one question, and splitting it into two
+   loses the comparison that was the point.
+--------------------------------------------------------------------------- */
+.pick{
+  margin:0 auto;max-width:620px;
+  display:grid;grid-template-columns:repeat(3,1fr);gap:8px;position:relative;
+}
+.pk{position:relative}
+.pk-btn{
+  width:100%;text-align:start;padding:11px 12px;border:1.5px solid var(--line);
+  border-radius:12px;background:var(--card);cursor:pointer;min-height:64px;
+  display:flex;flex-direction:column;gap:3px;
+}
+.pk-btn:disabled{opacity:.45;cursor:not-allowed}
+.pk-btn.set{border-color:var(--yes);background:var(--yes-bg)}
+.pk-l{font-size:11.5px;color:var(--soft);font-weight:500}
+.pk-btn.set .pk-l{color:var(--yes)}
+.pk-v{
+  font-size:14.5px;font-weight:600;line-height:1.25;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.pk-v.dim{font-weight:400;color:var(--soft)}
+
+.panel{
+  position:absolute;inset-inline:0;top:calc(100% + 7px);z-index:40;
+  background:var(--card);border:1px solid var(--line);border-radius:13px;
+  box-shadow:0 14px 34px -18px rgba(20,32,27,.65);overflow:hidden;
+  min-width:230px;
+}
+.pk:last-child .panel{inset-inline-start:auto;inset-inline-end:0}
+.panel input{
+  width:100%;padding:11px 13px;border:0;border-bottom:1px solid var(--rule);
+  background:var(--paper);font-size:14.5px;
+}
+.p-list{max-height:250px;overflow-y:auto}
+.p-opt{
+  display:flex;align-items:center;gap:9px;width:100%;text-align:start;
+  padding:10px 13px;border:0;border-bottom:1px solid var(--rule);
+  background:none;cursor:pointer;font-size:14.5px;
+}
+.p-opt:last-child{border-bottom:0}
+.p-opt:hover{background:var(--paper)}
+.box{
+  width:17px;height:17px;border-radius:5px;border:1.5px solid var(--line);
+  flex:none;display:grid;place-items:center;font-size:11px;color:#fff;
+}
+.p-opt.on .box{background:var(--yes);border-color:var(--yes)}
+.p-n{font-weight:500;direction:ltr;unicode-bidi:isolate;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.p-c{margin-inline-start:auto;font-size:12px;color:var(--soft);flex:none}
+.p-c.fit{color:var(--yes);font-weight:500}
+.p-foot{
+  display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--rule);
+  background:var(--paper);
+}
+.p-foot button{
+  flex:1;padding:9px;border:0;border-radius:9px;font-size:14px;
+  font-weight:600;cursor:pointer;
+}
+.p-ok{background:var(--yes);color:#fff}
+.p-clr{background:var(--card);border:1px solid var(--line);color:var(--soft)}
+.p-none{padding:16px 13px;color:var(--soft);font-size:14px;text-align:center}
+
+@media (max-width:420px){
+  .pk-btn{min-height:58px;padding:9px 10px}
+  .pk-v{font-size:13.5px}
+}
+
+.or{
+  text-align:center;color:var(--soft);font-size:13px;margin:20px 0 4px;
+  position:relative;
+}
+.or::before,.or::after{
+  content:"";position:absolute;top:50%;width:32%;height:1px;background:var(--rule);
+}
+.or::before{inset-inline-start:0} .or::after{inset-inline-end:0}
+.err{background:var(--card);border:1px solid var(--no);border-inline-start-width:4px;
+  border-radius:12px;padding:16px 18px;color:var(--no);font-size:15px}
+.load{text-align:center;padding:46px;color:var(--soft);font-size:14px}
+.more{text-align:center;color:var(--soft);font-size:13.5px;padding:2px 0 10px}
+
+@media (min-width:720px){
+  body{padding-bottom:0}
+  .ask{position:sticky;top:0;bottom:auto;border-top:0;
+    border-bottom:1px solid var(--rule);padding:14px 16px}
+}
+@media (prefers-reduced-motion:no-preference){
+  .card{animation:up .3s cubic-bezier(.2,.7,.3,1) both}
+  @keyframes up{from{opacity:0;transform:translateY(8px)}}
+}
+</style>
+</head>
+<body>
+
+<!-- Shown until Firebase says who this is. The service rejects unsigned
+     requests anyway; this only saves the person a wall of errors. -->
+<div id="gate" hidden style="position:fixed;inset:0;z-index:100;
+     background:var(--paper);display:grid;place-items:center;padding:24px">
+  <div style="text-align:center;max-width:22rem">
+    <div style="font-size:22px;font-weight:700;line-height:1.4">
+      سجّل دخولك بحساب الشركة</div>
+    <p style="color:var(--soft);font-size:14.5px;margin:12px 0 22px">
+      الأداة بتوصل لبيانات عملاء، فالدخول متاح لفريق أفاقي بس.</p>
+    <button id="signin" type="button" style="padding:13px 26px;border:0;
+      border-radius:11px;background:var(--yes);color:#fff;font-weight:600;
+      font-size:15.5px;cursor:pointer">دخول بحساب جوجل</button>
+    <p id="gate-err" style="color:var(--no);font-size:13.5px;margin-top:14px"></p>
+  </div>
+</div>
+
+<header><div class="wrap mast">
+  <span class="mark">can<b>val</b></span>
+  <span class="tag">هل السيارة دي مدعومة؟</span>
+  <button class="back" id="back" type="button"><span>→</span>رجوع</button>
+</div></header>
+
+<div class="ask"><form id="f" autocomplete="off">
+  <div class="field">
+    <input id="q" placeholder="اكتب الماركة والموديل" aria-label="الماركة والموديل"
+           enterkeyhint="search" autocomplete="off" role="combobox"
+           aria-expanded="false" aria-controls="sugg">
+    <div class="sugg" id="sugg" role="listbox" aria-label="اقتراحات"></div>
+  </div>
+  <button type="submit">اعرف</button>
+</form></div>
+
+<main class="wrap" id="out">
+  <div class="empty">
+    <div class="q">العميل بيسأل عن أنهي عربية؟</div>
+    <p>اكتب الماركة والموديل، وهنقولك بتدعم إيه بالظبط — بناءً على عربيات متركبة عندنا فعلاً.</p>
+    <div class="pick">
+      <div class="pk" id="pk-make">
+        <button class="pk-btn" type="button" data-k="make">
+          <span class="pk-l">نوع العربية</span>
+          <span class="pk-v dim">اختار</span></button>
+      </div>
+      <div class="pk" id="pk-model">
+        <button class="pk-btn" type="button" data-k="model" disabled>
+          <span class="pk-l">الموديل</span>
+          <span class="pk-v dim">—</span></button>
+      </div>
+      <div class="pk" id="pk-year">
+        <button class="pk-btn" type="button" data-k="year" disabled>
+          <span class="pk-l">السنة</span>
+          <span class="pk-v dim">—</span></button>
+      </div>
+    </div>
+    <div class="or">أو اكتب الاسم في الخانة تحت</div>
+    <div id="fresh"></div>
+    <div class="synced" id="synced"></div>
+  </div>
+</main>
+
+<script>
+const OUT=document.getElementById('out');
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+/* ---------------------------------------------------------------------------
+   Sign-in. The service holds the credentials for both platforms and can see
+   every customer's fleet, so it verifies a Firebase ID token on every
+   request. This block obtains one; the check that matters happens on the
+   server, which will not accept anything it has not verified against
+   Google's published keys.
+--------------------------------------------------------------------------- */
+const FIREBASE = window.CANVAL_FIREBASE || null;   // set in config.js
+let token = () => window.__canvalToken || null;
+
+async function signIn(){
+  if (!FIREBASE) return;                            // local run, auth off
+  const { initializeApp } = await import(
+    'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
+  const { getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider,
+          signOut } = await import(
+    'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
+
+  const auth = getAuth(initializeApp(FIREBASE));
+  const gate = document.getElementById('gate');
+
+  onAuthStateChanged(auth, async user => {
+    if (user){
+      window.__canvalToken = await user.getIdToken();
+      // Tokens last an hour; refresh well before that so a long session
+      // does not fail mid-question.
+      setInterval(async ()=>{ window.__canvalToken = await user.getIdToken(true); },
+                  45*60*1000);
+      gate.hidden = true;
+      document.body.classList.remove('locked');
+      openingScreen();
+    } else {
+      gate.hidden = false;
+      document.body.classList.add('locked');
+    }
+  });
+
+  document.getElementById('signin').onclick = () =>
+    signInWithPopup(auth, new GoogleAuthProvider()).catch(e=>{
+      document.getElementById('gate-err').textContent =
+        'مقدرناش نسجّل دخولك. جرّب تاني أو كلّم الـ IT.';
+    });
+}
+
+async function api(p){
+  const h={};const t=token();if(t)h.Authorization='Bearer '+t;
+  const r=await fetch(p,{headers:h});
+  if(r.status===401)throw new Error('سجّل دخولك عشان تكمل.');
+  if(!r.ok)throw new Error((await r.json().catch(()=>({}))).error||'الخدمة مردتش.');
+  return r.json();
+}
+
+const YEARS=c=>c.year_from?`${c.year_from}–${c.year_to||'الآن'}`:'كل السنوات';
+
+/* Four states. The wording of each is chosen so nobody has to interpret it:
+   "مدعومة" means we watched it work on vehicles we fitted, not that a
+   document claims it. */
+function verdictOf(c){
+  const cov=c.coverage;
+  if(cov&&cov.checked&&cov.works.length){
+    return cov.fails.length
+      ?['part','مدعومة جزئياً','بتشتغل، بس مش كل الحاجات']
+      :['yes','مدعومة','متأكدين — شغالة على عربيات متركبة عندنا'];
+  }
+  if(c.installs)return['part','متركبة قبل كده','لسه محتاجة تأكيد من القراءات'];
+  return['part','موجودة في القائمة','بس عمرها ما اتركبت، فمحتاجة فحص'];
+}
+
+/* The message sales actually send. Written the way a person writes, not a
+   data dump with a greeting on top. */
+function message(c,v){
+  const w=(c.coverage?.works||[]).map(x=>x.ar);
+  const f=(c.coverage?.fails||[]).map(x=>x.ar);
+  const name=c.name+(c.variant?' '+c.variant:'');
+  if(v[0]==='yes'||(v[0]==='part'&&w.length)){
+    let m=`بخصوص ${name} (${YEARS(c)}):\n\nالسيارة مدعومة، والبيانات اللي هتوصلك منها:\n`;
+    m+=w.map(x=>`• ${x}`).join('\n');
+    if(f.length)m+=`\n\nومش هيتوفر منها:\n`+f.map(x=>`• ${x}`).join('\n');
+    m+=`\n\nالكلام ده مبني على عربيات من نفس الموديل شغالة عندنا فعلاً، مش على مواصفات ورقية.`;
+    return m;
+  }
+  if(c.installs)
+    return `بخصوص ${name} (${YEARS(c)}):\n\nالسيارة متركب عليها قبل كده، وبنراجع القراءات دلوقتي عشان نأكدلك البيانات اللي هتوصلك بالظبط. هرجعلك خلال يوم عمل.`;
+  return `بخصوص ${name} (${YEARS(c)}):\n\nالسيارة موجودة عندنا في القائمة، بس لسه متركبتش على نفس الموديل. محتاجين نجرب على سيارة واحدة الأول عشان نأكدلك البيانات اللي هتوصلك، ونرجعلك بالنتيجة.`;
+}
+
+function list(items,cls,mark){
+  return `<ul class="list">${items.map(x=>`<li>
+    <span class="b ${cls}">${mark}</span>
+    <span>${esc(x.ar)}${x.translated?'':`<span class="en">${esc(x.en)}</span>`}</span>
+  </li>`).join('')}</ul>`;
+}
+
+/* The devices the verdict was read from. Anyone who doubts it can take an
+   IMEI, open it on the tracking platform and see the same readings -- the
+   claim is checkable rather than something to be believed. */
+function devices(cov){
+  const ds = (cov && cov.devices) || [];
+  if (!ds.length) return '';
+  return `<div class="devs">
+    <h5>الأجهزة اللي القراءات جت منها</h5>
+    <p>افتح أي رقم منهم على منصة المتابعة وهتلاقي نفس القراءات.
+       متبعتش الأرقام دي لعميل — دي عربيات عملاء تانيين.</p>
+    ${ds.map(d=>`<div class="dev">
+      <code>${esc(d.imei)}</code>
+      <button type="button" data-copy="${esc(d.imei)}">انسخ</button>
+      <span class="n">${d.live} إشارة</span></div>`).join('')}
+  </div>`;
+}
+
+function card(c){
+  const v=verdictOf(c),cov=c.coverage,msg=message(c,v);
+  let body='';
+  if(cov&&cov.checked){
+    if(cov.works.length)body+=`<div class="sec">
+      <h3>البيانات اللي هتوصل للعميل <span class="n">${cov.works.length}</span></h3>
+      ${list(cov.works,'y','✓')}</div>`;
+    if(cov.fails.length)body+=`<div class="sec">
+      <h3>مش هيتوفر <span class="n">${cov.fails.length}</span></h3>
+      ${list(cov.fails,'n','✕')}
+      <div class="hint">متوعدش العميل بالحاجات دي — جرّبناها ومجتش.</div></div>`;
+  }else{
+    const d=c.declared_ar||[];
+    body+=`<div class="sec">
+      <h3>المفروض تدعم <span class="n">${d.length}</span></h3>
+      ${list(d.slice(0,10),'q','؟')}
+      ${d.length>10?`<div class="hint">و${d.length-10} حاجة تانية</div>`:''}
+      <div class="hint">دي مواصفات المصنّع. لسه محتجناش نتأكد منها بنفسنا.</div></div>`;
+  }
+  body+=`<div class="send"><h3>ابعت للعميل</h3>
+    <div class="msg">${esc(msg)}</div>
+    <button class="copy" data-t="${esc(msg)}">انسخ الرسالة</button></div>`;
+  body+=`<details><summary>تفاصيل تقنية</summary><div class="tech">
+    <div class="row"><span>الموديل في النظام</span><span class="mono">${esc(c.raw_model||'')}</span></div>
+    <div class="row"><span>سنوات الصنع</span><span>${YEARS(c)}</span></div>
+    <div class="row"><span>ناقل الكان</span><span class="mono">${c.can_bus?'CAN'+c.can_bus:'—'}</span></div>
+    <div class="row"><span>السنون</span><span class="mono">${esc(c.obd_pins||'—')}</span></div>
+    <div class="row"><span>السرعة</span><span class="mono">${c.bitrate_kbps?c.bitrate_kbps+' kbps':'—'}</span></div>
+    ${cov?`<div class="row"><span>اتفحصت على</span><span>${cov.checked} من ${cov.of} عربية</span></div>`:''}
+    ${c.outdated_installs?`<div class="row"><span>نسخة أقدم</span><span>${c.outdated_installs} عربية</span></div>`:''}
+    ${c.manual_url?`<div class="row"><span>دليل التركيب</span><a href="${esc(c.manual_url)}" target="_blank" rel="noopener">افتح</a></div>`:''}
+    ${devices(cov)}
+  </div></details>`;
+  return `<article class="card">
+    <div class="head ${v[0]}">
+      <div class="big">${v[1]}</div><div class="sub">${v[2]}</div>
+      <div class="veh">${esc(c.name)}${c.variant?' '+esc(c.variant):''}<small>${YEARS(c)}</small></div>
+    </div>${body}</article>`;
+}
+
+function noFile(d){
+  const heavy=d.vehicle_class==='heavy';
+  const msg=heavy
+    ?`بخصوص ${d.query}:\n\nالسيارة دي مش عندنا ملف مخصص ليها، بس هي من الشاحنات اللي بتشتغل بالمعيار القياسي، وده بيوصّل البيانات الأساسية: لفات المحرك، سرعة المركبة، عداد المسافة، ساعات التشغيل، ومستوى الوقود.\n\nمحتاجين نجرب على سيارة واحدة عشان نأكدلك، ونرجعلك بالنتيجة.`
+    :`بخصوص ${d.query}:\n\nالسيارة دي لسه مش في القائمة عندنا. محتاجين نجرب على سيارة واحدة عشان نعرف بتدعم إيه بالظبط، ونرجعلك بالنتيجة.`;
+  const basics=[{ar:'لفات المحرك',translated:1},{ar:'سرعة المركبة',translated:1},
+    {ar:'عداد المسافة',translated:1},{ar:'ساعات تشغيل المحرك',translated:1},
+    {ar:'مستوى الوقود',translated:1}];
+  return `<article class="card">
+    <div class="head no"><div class="big">محتاجة فحص</div>
+      <div class="sub">${heavy?'غالباً هتشتغل بالمعيار القياسي':'مفيش ملف ليها عندنا'}</div>
+      <div class="veh">${esc(d.query)}</div></div>
+    ${heavy?`<div class="sec"><h3>المتوقع من المعيار القياسي</h3>${list(basics,'q','؟')}
+      <div class="hint">الشاحنات الثقيلة بتطبق المعيار ده غالباً، بس لازم نتأكد بسيارة واحدة.</div></div>`:''}
+    <div class="send"><h3>ابعت للعميل</h3><div class="msg">${esc(msg)}</div>
+      <button class="copy" data-t="${esc(msg)}">انسخ الرسالة</button></div></article>`;
+}
+
+document.addEventListener('click',async e=>{
+  const d=e.target.closest('[data-copy]');
+  if(d){
+    try{ await navigator.clipboard.writeText(d.dataset.copy); }catch{}
+    const was=d.textContent; d.textContent='اتنسخ';
+    setTimeout(()=>{ d.textContent=was; },1400);
+    return;
+  }
+  const b=e.target.closest('.copy');if(!b)return;
+  try{await navigator.clipboard.writeText(b.dataset.t);}
+  catch{const t=document.createElement('textarea');t.value=b.dataset.t;
+    document.body.appendChild(t);t.select();document.execCommand('copy');t.remove();}
+  b.textContent='اتنسخت';b.classList.add('done');
+  setTimeout(()=>{b.textContent='انسخ الرسالة';b.classList.remove('done');},1800);
+});
+
+async function ask(q){
+  OUT.innerHTML='<div class="load">بندوّر…</div>';
+  try{
+    const d=await api('/api/search?q='+encodeURIComponent(q));
+    if(!d.found){OUT.innerHTML=noFile(d); showingResult(true); return;}
+    OUT.innerHTML=d.results.map(card).join('')
+      +(d.found>d.shown?`<div class="more">فيه ${d.found-d.shown} نتيجة تانية. ضيف سنة الصنع عشان نضيّق البحث.</div>`:'');
+    showingResult(true);
+    window.scrollTo({top:0,behavior:'smooth'});
+  }catch(e){OUT.innerHTML=`<div class="err">${esc(e.message)}</div>`; showingResult(true);}
+}
+
+const QI=document.getElementById('q'), SG=document.getElementById('sugg');
+let sgItems=[], sgAt=-1, sgTimer=null, sgSeq=0;
+
+function closeSugg(){ SG.innerHTML=''; sgItems=[]; sgAt=-1; QI.setAttribute('aria-expanded','false'); }
+
+function drawSugg(items, q){
+  sgItems=items; sgAt=-1;
+  if(!items.length){ closeSugg(); return; }
+  QI.setAttribute('aria-expanded','true');
+  SG.innerHTML='<div class="sugg-head">اختار الموديل بالظبط</div>'+items.map((x,i)=>{
+    const yr = x.year_from ? `${x.year_from}–${x.year_to||'الآن'}` : 'كل السنوات';
+    const fit = x.installs
+      ? `<span class="sg-fit">متركبة على ${x.installs}</span>`
+      : `<span class="sg-new">لسه متركبتش</span>`;
+    const bus = x.buses>1 ? `<span>${x.buses} ناقل</span>` : '';
+    return `<button type="button" role="option" data-i="${i}" aria-selected="false">
+      <span class="sg-name">${esc(x.name)}${x.variant?' '+esc(x.variant):''}</span>
+      <span class="sg-meta"><span>${yr}</span>${fit}${bus}</span></button>`;
+  }).join('');
+}
+
+function highlight(n){
+  const btns=[...SG.querySelectorAll('button')];
+  if(!btns.length) return;
+  sgAt=(n+btns.length)%btns.length;
+  btns.forEach((b,i)=>b.setAttribute('aria-selected', i===sgAt?'true':'false'));
+  btns[sgAt].scrollIntoView({block:'nearest'});
+}
+
+async function fetchSugg(q){
+  const seq=++sgSeq;
+  try{
+    const d=await api('/api/suggest?q='+encodeURIComponent(q));
+    if(seq!==sgSeq) return;                 // a later keystroke already won
+    drawSugg(d.suggestions||[], q);
+  }catch{ closeSugg(); }
+}
+
+QI.addEventListener('input',()=>{
+  const q=QI.value.trim();
+  clearTimeout(sgTimer);
+  if(q.length<2){ closeSugg(); return; }
+  sgTimer=setTimeout(()=>fetchSugg(q),140);
+});
+
+QI.addEventListener('keydown',e=>{
+  if(!sgItems.length) return;
+  if(e.key==='ArrowDown'){ e.preventDefault(); highlight(sgAt+1); }
+  else if(e.key==='ArrowUp'){ e.preventDefault(); highlight(sgAt-1); }
+  else if(e.key==='Escape'){ closeSugg(); }
+  else if(e.key==='Enter' && sgAt>=0){ e.preventDefault(); choose(sgItems[sgAt]); }
+});
+
+SG.addEventListener('click',e=>{
+  const b=e.target.closest('button[data-i]');
+  if(b) choose(sgItems[+b.dataset.i]);
+});
+
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.field')) closeSugg();
+});
+
+function choose(item){
+  if(!item) return;
+  QI.value=item.name;
+  closeSugg(); QI.blur(); ask(item.name);
+}
+
+document.getElementById('f').addEventListener('submit',e=>{
+  e.preventDefault();
+  clearTimeout(sgTimer);
+  // Enter with a highlighted suggestion takes it; otherwise search as typed.
+  if(sgAt>=0 && sgItems[sgAt]) return choose(sgItems[sgAt]);
+  const q=QI.value.trim();
+  if(q){ closeSugg(); QI.blur(); ask(q); }
+});
+/* ---------------------------------------------------------------------------
+   Three pickers, each a searchable multi-select. Choosing cannot be
+   misspelt, which removes the spelling problem rather than mitigating it,
+   and each choice narrows the next so nobody faces 3934 options at once.
+--------------------------------------------------------------------------- */
+const SEL = {make:[], model:[], year:[]};
+const LABEL = {make:'نوع العربية', model:'الموديل', year:'السنة'};
+let openPanel = null;
+
+const csv = k => SEL[k].join(',');
+
+function paint(){
+  ['make','model','year'].forEach(k=>{
+    const btn = document.querySelector(`.pk-btn[data-k="${k}"]`);
+    const v = btn.querySelector('.pk-v');
+    const n = SEL[k].length;
+    btn.classList.toggle('set', n>0);
+    if (!n){
+      v.textContent = k==='make' ? 'اختار' : '—';
+      v.classList.add('dim');
+    } else {
+      v.textContent = n===1 ? SEL[k][0] : `${n} مختارين`;
+      v.classList.remove('dim');
+    }
+  });
+  document.querySelector('.pk-btn[data-k="model"]').disabled = !SEL.make.length;
+  document.querySelector('.pk-btn[data-k="year"]').disabled  = !SEL.make.length;
+}
+
+function closePanel(){
+  if (openPanel){ openPanel.remove(); openPanel = null; }
+}
+
+async function optionsFor(kind){
+  if (kind==='make'){
+    const d = await api('/api/makes');
+    return (d.makes||[]).map(m=>({v:m.make, n:m.make, c:m.installs}));
+  }
+  if (kind==='model'){
+    const d = await api('/api/models?make='+encodeURIComponent(csv('make')));
+    return (d.models||[]).map(m=>({v:m.model, n:m.label||m.model, c:m.installs}));
+  }
+  const d = await api('/api/years?make='+encodeURIComponent(csv('make'))
+                      +'&model='+encodeURIComponent(csv('model')));
+  return (d.years||[]).filter(y=>y.year)
+          .map(y=>({v:String(y.year), n:y.label, c:y.installs}));
+}
+
+async function togglePanel(kind, host){
+  if (openPanel && openPanel.dataset.k === kind) return closePanel();
+  closePanel();
+
+  const panel = document.createElement('div');
+  panel.className='panel'; panel.dataset.k=kind;
+  panel.innerHTML = `<input type="search" placeholder="ابحث في ${LABEL[kind]}"
+      aria-label="ابحث"><div class="p-list"></div>
+    <div class="p-foot"><button type="button" class="p-clr">امسح</button>
+      <button type="button" class="p-ok">تم</button></div>`;
+  host.appendChild(panel);
+  openPanel = panel;
+
+  const list = panel.querySelector('.p-list');
+  list.innerHTML = '<div class="p-none">لحظة…</div>';
+  let all = [];
+  try{ all = await optionsFor(kind); }
+  catch{ list.innerHTML='<div class="p-none">مش متاح</div>'; return; }
+
+  const draw = q => {
+    const t = (q||'').trim().toLowerCase();
+    const shown = t ? all.filter(o=>o.n.toLowerCase().includes(t)) : all;
+    list.innerHTML = shown.length ? shown.map(o=>`
+      <button class="p-opt ${SEL[kind].includes(o.v)?'on':''}" type="button"
+              data-v="${esc(o.v)}"><span class="box">✓</span>
+        <span class="p-n">${esc(o.n)}</span>
+        <span class="p-c ${o.c?'fit':''}">${o.c?o.c:'—'}</span></button>`).join('')
+      : '<div class="p-none">مفيش نتيجة</div>';
+  };
+  draw('');
+
+  panel.querySelector('input').addEventListener('input', e=>draw(e.target.value));
+  list.addEventListener('click', e=>{
+    const b = e.target.closest('.p-opt'); if(!b) return;
+    const v = b.dataset.v, i = SEL[kind].indexOf(v);
+    if (i>=0) SEL[kind].splice(i,1); else SEL[kind].push(v);
+    b.classList.toggle('on', i<0);
+    // A narrower choice upstream invalidates what was picked downstream.
+    if (kind==='make'){ SEL.model=[]; SEL.year=[]; }
+    if (kind==='model'){ SEL.year=[]; }
+    paint();
+  });
+  panel.querySelector('.p-clr').onclick = ()=>{
+    SEL[kind]=[];
+    if (kind==='make'){ SEL.model=[]; SEL.year=[]; }
+    if (kind==='model'){ SEL.year=[]; }
+    paint(); closePanel();
+  };
+  panel.querySelector('.p-ok').onclick = ()=>{ closePanel(); runPick(); };
+  panel.querySelector('input').focus({preventScroll:true});
+}
+
+document.querySelector('.pick').addEventListener('click', e=>{
+  const b = e.target.closest('.pk-btn');
+  if (b && !b.disabled){ e.stopPropagation(); togglePanel(b.dataset.k, b.parentElement); }
+});
+document.addEventListener('click', e=>{ if(!e.target.closest('.pk')) closePanel(); });
+
+async function runPick(){
+  if (!SEL.make.length) return;
+  OUT.innerHTML='<div class="load">بنشوف…</div>';
+  try{
+    const d = await api('/api/answer?make='+encodeURIComponent(csv('make'))
+      +'&model='+encodeURIComponent(csv('model'))
+      +'&year='+encodeURIComponent(csv('year')));
+    OUT.innerHTML = d.found ? d.results.map(card).join('') : noFile(d);
+    showingResult(true);
+    window.scrollTo({top:0, behavior:'smooth'});
+  }catch(e){ OUT.innerHTML=`<div class="err">${esc(e.message)}</div>`; showingResult(true); }
+}
+
+paint();
+
+/* Going back restores the opening screen without re-fetching anything the
+   person has already waited for. */
+const BACK = document.getElementById('back');
+let homeHTML = null;
+
+function showingResult(on){
+  BACK.classList.toggle('on', !!on);
+}
+
+function goHome(){
+  if (homeHTML !== null) OUT.innerHTML = homeHTML;
+  closePanel();
+  showingResult(false);
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+BACK.addEventListener('click', goHome);
+
+// Escape is the keyboard's back button.
+document.addEventListener('keydown', e=>{
+  if (e.key === 'Escape' && BACK.classList.contains('on')
+      && !openPanel && document.activeElement !== QI) goHome();
+});
+
+async function openingScreen(){
+  let d;
+  try{ d = await api('/api/start'); }catch{ return; }
+
+  const F = document.getElementById('fresh');
+  if (F && d.new && d.new.length){
+    F.innerHTML = `<div class="fresh">
+      <h4>بقت مدعومة جديد <span>${d.new.length}</span></h4>
+      ${d.new.map(n => {
+        const yr = n.year_from ? `${n.year_from}–${n.year_to||'الآن'}` : 'كل السنوات';
+        return `<button type="button" data-q="${esc(n.name)}">
+          <span class="fn">${esc(n.name)}</span>
+          <span class="fm">${yr} · ${n.buses} ناقل</span></button>`;
+      }).join('')}</div>`;
+    F.onclick = e => {
+      const b = e.target.closest('button[data-q]'); if(!b) return;
+      QI.value = b.dataset.q; closeSugg(); ask(b.dataset.q);
+    };
+  }
+
+  const S = document.getElementById('synced');
+  if (S && d.last_sync){
+    S.textContent = `آخر تحديث للقائمة: ${d.last_sync.ran_at}`;
+  }
+  homeHTML = OUT.innerHTML;
+}
+/* With Firebase configured the opening screen waits for sign-in; without
+   it (a local run) it starts straight away. */
+if (window.CANVAL_FIREBASE) signIn(); else openingScreen();
+</script>
+</body>
+</html>

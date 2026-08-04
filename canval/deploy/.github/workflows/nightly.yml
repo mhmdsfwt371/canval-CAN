@@ -1,0 +1,129 @@
+# Nightly: pull the catalogue, sweep the devices, ship a new container with
+# the fresh database baked in.
+#
+# Building the database here rather than on the server means the running
+# service holds no credentials at all -- they live in this job, which is not
+# reachable from the internet. It also means a request never waits on
+# Xirgo: by the time anyone asks, the answer is already in SQLite.
+#
+# The trade is that data is a day old. For a catalogue that changes a
+# handful of times a week, that is the right trade.
+
+name: nightly sync and deploy
+
+on:
+  schedule:
+    # 02:00 Riyadh, which is 23:00 UTC the day before.
+    - cron: "0 23 * * *"
+  workflow_dispatch:        # so it can be run by hand after a token change
+
+concurrency:
+  group: canval-deploy
+  cancel-in-progress: false
+
+env:
+  REGION: europe-west1
+  SERVICE: canval
+
+jobs:
+  sync-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install --quiet requests
+
+      - name: Build the database
+        env:
+          XDM_CLIENT_ID: ${{ secrets.XDM_CLIENT_ID }}
+          XDM_CLIENT_SECRET: ${{ secrets.XDM_CLIENT_SECRET }}
+          XDM_DOMAIN: ${{ secrets.XDM_DOMAIN }}
+          AFAQY_TOKEN: ${{ secrets.AFAQY_TOKEN }}
+          CANVAL_DB: canval.db
+        run: |
+          python -m canval.cli sync --hardware 98 99 108 116
+
+      - name: Refuse to ship a broken database
+        run: |
+          # A sync that half-worked would otherwise be deployed over a good
+          # one, and the tool would start answering "never installed" for
+          # vehicles it simply failed to read.
+          python - <<'PY'
+          import sqlite3, sys
+          db = sqlite3.connect("canval.db")
+          db.row_factory = sqlite3.Row
+          files = db.execute("SELECT COUNT(*) n FROM can_files").fetchone()["n"]
+          devs  = db.execute(
+              "SELECT COUNT(DISTINCT imei) n FROM device_can").fetchone()["n"]
+          fitted = db.execute(
+              "SELECT COUNT(DISTINCT imei) n FROM device_can "
+              "WHERE file_id IS NOT NULL").fetchone()["n"]
+          print(f"catalogue {files}   devices {devs}   fitted {fitted}")
+          if files < 1000:
+              sys.exit(f"only {files} catalogue rows -- refusing to deploy")
+          if devs < 500:
+              sys.exit(f"only {devs} devices swept -- refusing to deploy")
+          PY
+
+      - name: Report what changed
+        run: |
+          python - <<'PY'
+          import os, sqlite3
+          db = sqlite3.connect("canval.db"); db.row_factory = sqlite3.Row
+          run = db.execute(
+              "SELECT * FROM sync_runs ORDER BY id DESC LIMIT 1").fetchone()
+          new = db.execute(
+              """SELECT h.name, MIN(h.first_seen) since
+                   FROM file_history h
+                  WHERE h.gone_at IS NULL AND h.name != ''
+                    AND h.first_seen >= datetime('now','-2 days')
+                    AND h.first_seen > (SELECT MIN(ran_at) FROM sync_runs)
+                  GROUP BY h.name ORDER BY since DESC""").fetchall()
+          lines = [f"### canval sync",
+                   f"* catalogue rows: **{run['rows']}**",
+                   f"* added: **{run['added']}**  withdrawn: **{run['removed']}**"]
+          if new:
+              lines.append("\n**Newly supported:**")
+              lines += [f"* {r['name']}" for r in new]
+          else:
+              lines.append("\nNothing new since the last sync.")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as fh:
+              fh.write("\n".join(lines) + "\n")
+          PY
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy
+        run: |
+          gcloud run deploy "$SERVICE" \
+            --source . \
+            --region "$REGION" \
+            --allow-unauthenticated \
+            --memory 512Mi \
+            --cpu 1 \
+            --min-instances 0 \
+            --max-instances 3 \
+            --set-env-vars "CANVAL_REQUIRE_AUTH=1,CANVAL_FIREBASE_PROJECT=${{ secrets.FIREBASE_PROJECT }}"
+
+      # --allow-unauthenticated lets the browser reach the service at all;
+      # the service then refuses every request without a valid Firebase
+      # token of its own accord. Cloud Run's own IAM check cannot be used
+      # here because it would block the sign-in page too.
+
+      - name: Show the URL
+        run: |
+          gcloud run services describe "$SERVICE" --region "$REGION" \
+            --format='value(status.url)' >> "$GITHUB_STEP_SUMMARY"

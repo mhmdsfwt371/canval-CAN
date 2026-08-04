@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#EDF0F3">
+<title>canval — CAN fitment check</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ---------------------------------------------------------------------------
+   Palette taken from ISO 11898 wiring: CAN High is yellow, CAN Low is green.
+   Using the bus colours as the interface's functional accents means the
+   diagram and the verdict speak the same language a technician already reads
+   off the loom. The paper is cool rather than warm because this gets used
+   outdoors in strong sun, where a warm cream turns muddy behind glare.
+--------------------------------------------------------------------------- */
+:root{
+  --paper:#EDF0F3; --card:#FFFFFF; --ink:#0E1519; --ink-soft:#55636E;
+  --rule:#C4CDD5; --rule-soft:#DEE4E9;
+  --can-h:#D9A017;      /* CAN High */
+  --can-l:#1F7A55;      /* CAN Low  */
+  --fault:#A63A25;
+  --shadow:0 1px 0 rgba(14,21,25,.06), 0 8px 24px -16px rgba(14,21,25,.5);
+  --bar:76px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--paper); color:var(--ink);
+  font:400 16px/1.5 "IBM Plex Sans",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;
+  padding-bottom:calc(var(--bar) + env(safe-area-inset-bottom));
+}
+h1,h2,h3{margin:0;font-family:Archivo,system-ui,sans-serif;letter-spacing:-.02em}
+button,input{font:inherit;color:inherit}
+:focus-visible{outline:2.5px solid var(--ink);outline-offset:2px;border-radius:2px}
+
+.wrap{max-width:760px;margin:0 auto;padding:0 16px}
+
+/* masthead ---------------------------------------------------------------- */
+header{border-bottom:1px solid var(--rule);background:var(--card)}
+.mast{display:flex;align-items:baseline;gap:12px;padding:14px 0}
+.mark{
+  font-family:Archivo;font-weight:800;font-size:20px;letter-spacing:-.04em;
+  border-bottom:3px solid var(--can-h);line-height:1.1;
+}
+.tag{font-size:12.5px;color:var(--ink-soft)}
+.stat{margin-left:auto;font:600 11px/1 "IBM Plex Mono",monospace;
+  color:var(--ink-soft);letter-spacing:.06em;text-transform:uppercase}
+
+/* search — sits in the thumb zone on a phone, top of page on a desktop ----- */
+.search{
+  position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--card);
+  border-top:1px solid var(--rule);
+  padding:12px 16px calc(12px + env(safe-area-inset-bottom));
+}
+.search form{max-width:760px;margin:0 auto;display:flex;gap:8px}
+.search input{
+  flex:1;min-width:0;padding:14px 14px;border:1.5px solid var(--rule);
+  border-radius:10px;background:var(--paper);
+}
+.search input::placeholder{color:var(--ink-soft)}
+.search button{
+  padding:0 20px;border:0;border-radius:10px;background:var(--ink);
+  color:var(--paper);font-weight:600;cursor:pointer;
+}
+.search button:active{transform:translateY(1px)}
+
+/* cards ------------------------------------------------------------------- */
+main{padding:20px 0 28px}
+.card{
+  background:var(--card);border:1px solid var(--rule-soft);border-radius:14px;
+  box-shadow:var(--shadow);margin-bottom:16px;overflow:hidden;
+}
+.card-top{padding:18px 18px 14px}
+.vname{font-size:22px;font-weight:800;line-height:1.15}
+.vmeta{
+  margin-top:5px;font:400 13px/1.4 "IBM Plex Mono",monospace;
+  color:var(--ink-soft);
+}
+
+/* verdict ----------------------------------------------------------------- */
+.verdict{
+  display:inline-flex;align-items:center;gap:8px;margin-bottom:10px;
+  font:600 11.5px/1 "IBM Plex Mono",monospace;letter-spacing:.1em;
+  text-transform:uppercase;padding:7px 11px;border-radius:999px;
+}
+.v-proven{background:rgba(31,122,85,.12);color:var(--can-l)}
+.v-fitted{background:rgba(217,160,23,.16);color:#8A6408}
+.v-cat   {background:rgba(85,99,110,.12);color:var(--ink-soft)}
+.v-none  {background:rgba(166,58,37,.11);color:var(--fault)}
+.dot{width:7px;height:7px;border-radius:50%;background:currentColor}
+
+/* ---------------------------------------------------------------------------
+   THE PIN-OUT. A technician at the vehicle needs three facts before anything
+   else: which connector, which two pins, which speed. Everything else can
+   wait. Drawing the actual 16-way connector with the two live pins lit in
+   their bus colours answers it without being read.
+--------------------------------------------------------------------------- */
+.wiring{background:var(--ink);color:#E7EDF2;padding:18px}
+.wiring-head{
+  display:flex;justify-content:space-between;align-items:baseline;
+  font:600 10.5px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;
+  text-transform:uppercase;color:#8FA1AE;margin-bottom:14px;
+}
+.conn{display:flex;justify-content:center;padding:4px 0 10px}
+.pinout{width:100%;max-width:340px;height:auto}
+.pin-body{fill:none;stroke:#3D4B56;stroke-width:2}
+.pin{fill:#28333C;stroke:#48565F;stroke-width:1.2}
+.pin.hi{fill:var(--can-h);stroke:var(--can-h)}
+.pin.lo{fill:var(--can-l);stroke:var(--can-l)}
+.pin-num{font:600 8.5px "IBM Plex Mono",monospace;fill:#7C8C99;text-anchor:middle}
+.pin-num.on{fill:#0E1519}
+.wire-facts{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:1px;
+  background:#2A353E;border-radius:10px;overflow:hidden;margin-top:6px;
+}
+.fact{background:#18222A;padding:11px 10px;text-align:center}
+.fact-k{font:600 9.5px/1 "IBM Plex Mono",monospace;letter-spacing:.1em;
+  text-transform:uppercase;color:#8FA1AE}
+.fact-v{margin-top:5px;font:600 16px/1 "IBM Plex Mono",monospace}
+.fact-v.hi{color:var(--can-h)} .fact-v.lo{color:var(--can-l)}
+.legend{
+  margin-top:12px;font:400 11px/1.5 "IBM Plex Mono",monospace;color:#8FA1AE;
+  display:flex;gap:16px;flex-wrap:wrap;
+}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:2px;
+  margin-right:5px;vertical-align:-1px}
+
+/* signal lists ------------------------------------------------------------ */
+.block{padding:16px 18px;border-top:1px solid var(--rule-soft)}
+.block h3{
+  font:600 11px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--ink-soft);margin-bottom:11px;
+  display:flex;align-items:center;gap:9px;
+}
+.count{
+  font-family:"IBM Plex Mono";background:var(--paper);border:1px solid var(--rule-soft);
+  padding:2px 7px;border-radius:6px;font-size:11px;color:var(--ink);
+}
+ul.sig{list-style:none;margin:0;padding:0;display:grid;gap:7px}
+ul.sig li{display:flex;align-items:flex-start;gap:9px;font-size:15px;line-height:1.35}
+.tick{
+  flex:none;width:16px;height:16px;border-radius:4px;margin-top:2px;
+  display:grid;place-items:center;font:700 10px/1 "IBM Plex Mono",monospace;
+}
+.tick.ok{background:rgba(31,122,85,.14);color:var(--can-l)}
+.tick.no{background:rgba(166,58,37,.12);color:var(--fault)}
+.tick.qq{background:var(--paper);color:var(--ink-soft);border:1px solid var(--rule-soft)}
+.why{color:var(--ink-soft);font-size:12.5px;display:block;margin-top:1px}
+.on-n{margin-left:auto;font:400 11.5px "IBM Plex Mono",monospace;color:var(--ink-soft);flex:none}
+
+/* notes, links, states ---------------------------------------------------- */
+.note{
+  padding:13px 18px;background:rgba(217,160,23,.09);
+  border-top:1px solid rgba(217,160,23,.3);font-size:14px;line-height:1.45;
+}
+.guide{
+  display:inline-flex;align-items:center;gap:7px;margin-top:2px;
+  font-weight:600;font-size:14.5px;color:var(--ink);
+  text-decoration:none;border-bottom:2px solid var(--can-h);padding-bottom:1px;
+}
+.empty{text-align:center;padding:56px 20px 40px}
+.empty .big{font-size:26px;font-weight:800;line-height:1.2;max-width:15ch;margin:0 auto}
+.empty p{color:var(--ink-soft);margin:12px auto 0;max-width:34ch;font-size:15px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:22px}
+.chip{
+  padding:9px 13px;border:1px solid var(--rule);border-radius:999px;
+  background:var(--card);font:500 14px "IBM Plex Sans";cursor:pointer;
+}
+.chip:hover{border-color:var(--ink)}
+.more{text-align:center;color:var(--ink-soft);font-size:13.5px;padding:4px 0 8px}
+.err{
+  background:var(--card);border:1px solid var(--fault);border-left-width:4px;
+  border-radius:10px;padding:15px 17px;color:var(--fault);font-size:15px;
+}
+.checklist{margin:10px 0 0;padding-left:20px;font-size:14.5px;line-height:1.7}
+.load{text-align:center;padding:44px;color:var(--ink-soft);
+  font:400 13px "IBM Plex Mono",monospace;letter-spacing:.06em}
+
+@media (min-width:720px){
+  body{padding-bottom:0}
+  .search{position:sticky;top:0;bottom:auto;border-top:0;
+    border-bottom:1px solid var(--rule);padding:14px 16px}
+  .wire-facts{grid-template-columns:repeat(3,1fr)}
+}
+@media (prefers-reduced-motion:no-preference){
+  .card{animation:rise .32s cubic-bezier(.2,.7,.3,1) both}
+  @keyframes rise{from{opacity:0;transform:translateY(7px)}}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap mast">
+    <span class="mark">canval</span>
+    <span class="tag">CAN fitment check</span>
+    <span class="stat" id="stat"></span>
+  </div>
+</header>
+
+<div class="search">
+  <form id="form" autocomplete="off">
+    <input id="q" name="q" placeholder="Make and model — e.g. shacman 7300"
+           aria-label="Vehicle make and model" enterkeyhint="search">
+    <button type="submit">Check</button>
+  </form>
+</div>
+
+<main class="wrap" id="out">
+  <div class="empty">
+    <div class="big">Which truck are you standing next to?</div>
+    <p>Type the make and model. You will get the bus, the pins and what
+       actually works on vehicles already fitted.</p>
+    <div class="chips" id="chips"></div>
+  </div>
+</main>
+
+<script>
+const OUT = document.getElementById('out');
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* Firebase drops an ID token here once sign-in is wired up. Until then the
+   server must stay bound to localhost -- see canval/server.py. */
+const token = () => window.__canvalToken || null;
+
+async function api(path){
+  const h = {};
+  const t = token(); if (t) h.Authorization = 'Bearer ' + t;
+  const r = await fetch(path, {headers:h});
+  if (r.status === 401) throw new Error('Sign in to continue.');
+  if (!r.ok) throw new Error((await r.json().catch(()=>({}))).error
+                             || 'The service did not answer.');
+  return r.json();
+}
+
+/* --------------------------------------------------------------------------
+   The connector. Sixteen ways, two rows, the trapezoid everyone recognises.
+   Pins named by the CAN file are lit: the first in CAN-High yellow, the
+   second in CAN-Low green, matching the loom.
+-------------------------------------------------------------------------- */
+function pinout(pins){
+  const hi = pins[0], lo = pins[1];
+  const W = 340, H = 108, x0 = 26, gap = (W - 2*x0) / 7.4, r = 8.4;
+  let out = `<svg class="pinout" viewBox="0 0 ${W} ${H}" role="img"
+    aria-label="Connector pins ${pins.join(' and ') || 'unknown'}">
+    <path class="pin-body" d="M14 16 H${W-14} L${W-24} ${H-14} H24 Z"/>`;
+  for (let i = 0; i < 16; i++){
+    const row = i < 8 ? 0 : 1, col = i % 8, n = i + 1;
+    const cx = x0 + col*gap + row*5.5, cy = row ? H-40 : 44;
+    const cls = n === hi ? ' hi' : n === lo ? ' lo' : '';
+    out += `<circle class="pin${cls}" cx="${cx}" cy="${cy}" r="${r}"/>`;
+    out += `<text class="pin-num${cls?' on':''}" x="${cx}" y="${cy+3}">${n}</text>`;
+  }
+  return out + '</svg>';
+}
+
+function wiring(c){
+  const pins = c.pins || [];
+  return `<div class="wiring">
+    <div class="wiring-head"><span>Wiring</span><span>${esc(c.obd_pins || 'connector not recorded')}</span></div>
+    <div class="conn">${pinout(pins)}</div>
+    <div class="wire-facts">
+      <div class="fact"><div class="fact-k">Bus</div>
+        <div class="fact-v">${c.can_bus ? 'CAN'+c.can_bus : '—'}</div></div>
+      <div class="fact"><div class="fact-k">CAN&nbsp;High</div>
+        <div class="fact-v hi">${pins[0] ? 'pin '+pins[0] : '—'}</div></div>
+      <div class="fact"><div class="fact-k">CAN&nbsp;Low</div>
+        <div class="fact-v lo">${pins[1] ? 'pin '+pins[1] : '—'}</div></div>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--can-h)"></i>CAN High</span>
+      <span><i style="background:var(--can-l)"></i>CAN Low</span>
+      <span>${c.bitrate_kbps ? c.bitrate_kbps+' kbps' : 'default bitrate'}</span>
+    </div>
+  </div>`;
+}
+
+const VERDICT = {
+  proven:          ['v-proven','Works on fitted vehicles'],
+  fitted_unproven: ['v-fitted','Fitted, not yet confirmed'],
+  catalogue_only:  ['v-cat','In the catalogue only'],
+};
+
+function card(c, verdict, first){
+  const v = first ? (VERDICT[verdict] || VERDICT.catalogue_only) : null;
+  const yr = c.year_from ? `${c.year_from}–${c.year_to || 'now'}` : 'any year';
+  const cov = c.coverage;
+
+  let body = '';
+  if (cov && cov.checked){
+    if (cov.works.length) body += `<div class="block">
+      <h3>Works <span class="count">${cov.works.length}</span></h3>
+      <ul class="sig">${cov.works.map(w =>
+        `<li><span class="tick ok">✓</span><span>${esc(w.name)}</span>
+         <span class="on-n">${w.on}/${w.of}</span></li>`).join('')}</ul></div>`;
+
+    if (cov.fails.length) body += `<div class="block">
+      <h3>Does not work <span class="count">${cov.fails.length}</span></h3>
+      <ul class="sig">${cov.fails.map(f =>
+        `<li><span class="tick no">✕</span><span>${esc(f.name)}
+         <span class="why">${esc(f.why)}</span></span></li>`).join('')}</ul></div>`;
+
+    if (cov.uncheckable.length) body += `<div class="block">
+      <h3>Cannot be checked from here <span class="count">${cov.uncheckable.length}</span></h3>
+      <ul class="sig">${cov.uncheckable.slice(0,6).map(n =>
+        `<li><span class="tick qq">?</span><span>${esc(n)}</span></li>`).join('')}
+        ${cov.uncheckable.length>6 ? `<li><span class="tick qq">+</span>
+        <span>${cov.uncheckable.length-6} more</span></li>`:''}</ul></div>`;
+
+    body += `<div class="block"><h3>Evidence</h3>
+      <div style="font:400 14px/1.5 'IBM Plex Sans'">
+      Checked on ${cov.checked} of ${c.installs} fitted
+      vehicle${c.installs===1?'':'s'}${cov.checked<2
+        ? ' — one vehicle only, so treat this as indicative.' : '.'}</div></div>`;
+  } else if (c.installs){
+    body += `<div class="block"><h3>Fitted</h3>
+      <div style="font:400 14px/1.5 'IBM Plex Sans'">On ${c.installs}
+      vehicle${c.installs===1?'':'s'}, but none of them are readable from this
+      account, so nothing is confirmed yet.</div></div>`;
+  } else {
+    body += `<div class="block"><h3>Declared by the file
+      <span class="count">${c.declared.length}</span></h3>
+      <ul class="sig">${c.declared.slice(0,8).map(n =>
+        `<li><span class="tick qq">?</span><span>${esc(n)}</span></li>`).join('')}
+        ${c.declared.length>8 ? `<li><span class="tick qq">+</span><span>${
+        c.declared.length-8} more</span></li>`:''}</ul>
+      <div style="margin-top:11px;color:var(--ink-soft);font-size:13.5px">
+      Never fitted anywhere yet — this list is the manufacturer's claim,
+      not a result.</div></div>`;
+  }
+
+  if (c.outdated_installs) body += `<div class="note">
+    ${c.outdated_installs} fitted vehicle${c.outdated_installs===1?'':'s'} still
+    run an older revision of this file. Updating is quicker than a site visit.
+  </div>`;
+
+  if (c.manual_url) body += `<div class="block">
+    <a class="guide" href="${esc(c.manual_url)}" target="_blank"
+       rel="noopener">Installation guide →</a></div>`;
+
+  return `<article class="card">
+    <div class="card-top">
+      ${v ? `<div class="verdict ${v[0]}"><span class="dot"></span>${v[1]}</div>` : ''}
+      <div class="vname">${esc(c.name)}${c.variant ? ' · '+esc(c.variant) : ''}</div>
+      <div class="vmeta">${yr} &nbsp;·&nbsp; VMID ${c.vmid ?? '—'}${
+        c.revisions>1 ? ` &nbsp;·&nbsp; rev ${c.revision} of ${c.revisions}`:''}</div>
+    </div>
+    ${wiring(c)}
+    ${body}
+  </article>`;
+}
+
+function noFile(d){
+  const heavy = d.vehicle_class === 'heavy';
+  return `<article class="card">
+    <div class="card-top">
+      <div class="verdict v-none"><span class="dot"></span>No file for this vehicle</div>
+      <div class="vname">${esc(d.query)}</div>
+      <div class="vmeta">nothing in the catalogue matches</div>
+    </div>
+    ${heavy && d.generic.length ? `<div class="block">
+      <h3>Try the standard first</h3>
+      <div style="font:400 14.5px/1.55 'IBM Plex Sans';margin-bottom:11px">
+        Heavy vehicles implement J1939/FMS, so the generic file is worth
+        fitting before booking a dedicated trial.</div>
+      <ul class="sig">${d.generic.map(g =>
+        `<li><span class="tick ok">→</span><span>${esc(g.name)}</span>
+         <span class="on-n">${g.bitrate_kbps ? g.bitrate_kbps+' kbps':'default'}</span></li>`
+      ).join('')}</ul></div>` : ''}
+    <div class="block"><h3>If you go out, bring back</h3>
+      <ol class="checklist">${d.checklist.map(i=>`<li>${esc(i)}</li>`).join('')}</ol>
+      <div style="margin-top:11px;color:var(--ink-soft);font-size:13.5px">
+        Recorded once, this vehicle is answered from the desk from then on.</div>
+    </div>
+  </article>`;
+}
+
+async function search(q){
+  OUT.innerHTML = `<div class="load">checking…</div>`;
+  try{
+    const d = await api('/api/search?q=' + encodeURIComponent(q));
+    if (!d.found){ OUT.innerHTML = noFile(d); return; }
+    OUT.innerHTML =
+      d.results.map((c,i) => card(c, d.verdict, i===0)).join('') +
+      (d.found > d.shown
+        ? `<div class="more">${d.found - d.shown} more catalogue entries match.
+           Add the year or trim to narrow it.</div>` : '');
+    window.scrollTo({top:0, behavior:'smooth'});
+  }catch(e){
+    OUT.innerHTML = `<div class="err">${esc(e.message)}</div>`;
+  }
+}
+
+document.getElementById('form').addEventListener('submit', e => {
+  e.preventDefault();
+  const q = document.getElementById('q').value.trim();
+  if (q){ document.getElementById('q').blur(); search(q); }
+});
+
+['shacman 7300','mercedes actros','volvo fh','toyota hiace'].forEach(x => {
+  const b = document.createElement('button');
+  b.className = 'chip'; b.type = 'button'; b.textContent = x;
+  b.onclick = () => { document.getElementById('q').value = x; search(x); };
+  document.getElementById('chips').appendChild(b);
+});
+
+api('/api/health').then(h => {
+  document.getElementById('stat').textContent =
+    `${h.can_files.toLocaleString()} files · ${h.coverage.resolved.toLocaleString()} fitted`;
+}).catch(()=>{});
+</script>
+</body>
+</html>
