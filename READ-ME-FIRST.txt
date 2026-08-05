@@ -1,27 +1,22 @@
-canval v1.2
+canval v1.3
 ===========
 
-One file. Unzip over D:\canval:
+One file, no sync needed. Unzip over D:\canval:
 
     docs/index.html
 
     cd D:\canval
     git pull --no-rebase
     git add -A
-    git commit -m "canval v1.2"
+    git commit -m "canval v1.3"
     git push
-
-No sync needed -- this version only changes how the page arranges what is
-already there.
 
 What changed
 ------------
-Picking a year used to list every file whose range reached it, so asking
-about a 2022 Suburban showed both "[13+]" and "[22+]" in one list, as if
-they were equal answers. They are not: one was built for that year and
-the other merely extends into it.
+Tapping one of the ten cards filled in the pickers and showed a result,
+but nothing marked which card had produced it and there was no way back
+except tapping the same card again -- a toggle nobody would guess at.
 
-The file built for the chosen year now stands on its own, and the older
-files sit below under "wider files that also cover it". Nothing is
-hidden -- the older file is still the fallback when the closer one fails
--- but it is no longer presented as the same thing.
+Now the chosen card stays marked for as long as its answer is on screen,
+a Back button sits above the result, and picking a make by hand clears
+the card. Nothing else changed.
