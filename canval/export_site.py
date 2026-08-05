@@ -195,11 +195,31 @@ def export_fleet(conn) -> dict:
                       COUNT(DISTINCT imei) AS devices
                  FROM device_can GROUP BY state ORDER BY devices DESC""")]
 
-    top = [{"name": r["name"], "devices": r["n"]} for r in conn.execute(
-        """SELECT f.name, COUNT(DISTINCT d.imei) n
-             FROM device_can d JOIN can_files f ON f.file_id = d.file_id
-            WHERE d.file_id IS NOT NULL AND f.name IS NOT NULL AND f.name != ''
-            GROUP BY f.name ORDER BY n DESC LIMIT 40""")]
+    # The page turns these into cards, so each one carries what a card
+    # needs to jump straight to its own result: make, model, and a year
+    # inside the file's range. Grouped by name because the same vehicle
+    # often has two bus files and one card should mean one vehicle.
+    top = []
+    for r in conn.execute(
+            """SELECT f.name, COUNT(DISTINCT d.imei) n,
+                      MIN(f.make) mk, MIN(f.model) md,
+                      MIN(f.year_from) y0, MAX(COALESCE(f.year_to, 9999)) y1
+                 FROM device_can d JOIN can_files f ON f.file_id = d.file_id
+                WHERE d.file_id IS NOT NULL AND f.name IS NOT NULL AND f.name != ''
+                GROUP BY f.name ORDER BY n DESC LIMIT 40"""):
+        entry = {"name": r["name"], "devices": r["n"]}
+        if _is_generic(r["name"]):
+            entry["g"] = 1
+        else:
+            if r["mk"]:
+                entry["mk"] = r["mk"]
+            if r["md"]:
+                entry["md"] = r["md"]
+        if r["y0"]:
+            entry["y0"] = r["y0"]
+            if r["y1"] and r["y1"] != 9999:
+                entry["y1"] = r["y1"]
+        top.append(entry)
 
     hints: dict[str, list] = {}
     has_hints = conn.execute(

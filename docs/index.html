@@ -179,6 +179,49 @@ bdi{unicode-bidi:isolate}
 .empty{padding:16px;color:var(--muted);font-size:14px}
 .note{font-size:13px;color:var(--muted);margin:10px 2px 0;max-width:70ch}
 
+/* ---------------- the guide ---------------- */
+#guide{position:fixed;inset:0;z-index:80;background:rgba(10,14,16,.5);
+  display:flex;align-items:flex-start;justify-content:center;padding:5vh 16px;
+  backdrop-filter:blur(2px)}
+#guide[hidden]{display:none}
+.sheet{background:var(--panel);border:1px solid var(--line);border-radius:4px;
+  width:min(760px,100%);max-height:90vh;display:flex;flex-direction:column;
+  box-shadow:0 24px 60px -20px rgba(0,0,0,.5)}
+.shead{display:flex;align-items:center;gap:10px;padding:12px 16px;
+  border-bottom:1px solid var(--line)}
+.shead span{font-weight:700;font-size:16px;margin-inline-end:auto}
+.sbody{overflow-y:auto;padding:8px 22px 26px}
+.sbody h2{font-size:23px;letter-spacing:-.02em;margin:16px 0 6px}
+.sbody h3{font-size:15px;margin:24px 0 6px;color:var(--canl);
+  border-bottom:1px solid var(--line);padding-bottom:5px}
+.sbody .gi{color:var(--muted);font-size:14.5px;margin:0}
+.sbody ul{margin:0;padding-inline-start:20px}
+.sbody li{margin-bottom:7px;font-size:14.5px}
+@media(prefers-reduced-motion:no-preference){
+  .sheet{animation:rise .18s ease-out both}
+}
+
+/* ---------------- cards ---------------- */
+#cards{margin-top:30px}
+.cards{display:grid;gap:10px;
+  grid-template-columns:repeat(auto-fill,minmax(190px,1fr))}
+.card{
+  display:grid;gap:1px;text-align:start;cursor:pointer;font-family:var(--sans);
+  background:var(--panel);border:1px solid var(--line);border-radius:3px;
+  padding:12px 14px;color:var(--ink);position:relative;overflow:hidden;
+}
+.card::before{content:"";position:absolute;inset-block:0;inset-inline-start:0;
+  width:3px;background:var(--canh)}
+.card:hover{border-color:var(--ink)}
+.card:hover::before{background:var(--canl)}
+.card .cn{font-weight:700;font-size:15px;letter-spacing:-.02em;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card .cm{font-size:13.5px;color:var(--muted);min-height:1.2em;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card .cy{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:3px}
+.card .cd{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:6px}
+.card .cd b{font-size:15px;color:var(--ink);font-weight:600}
+
 /* ---------------- tabs ---------------- */
 .tabs{display:flex;gap:4px;margin:40px 0 0;border-bottom:1px solid var(--line)}
 .tab{background:none;border:0;border-bottom:2px solid transparent;padding:9px 14px;
@@ -210,6 +253,7 @@ footer{border-top:1px solid var(--line);padding:16px 0 40px;font-size:13px;
   <div class="brand">canval <span data-t="tag"></span></div>
   <div class="gauges" id="gauges"></div>
   <div class="tools">
+    <button class="tool" id="help" type="button" data-t="guideBtn"></button>
     <button class="tool" id="lang" type="button">EN</button>
     <button class="tool" id="theme" type="button" aria-label="theme">
       <svg width="15" height="15" viewBox="0 0 20 20" fill="none"
@@ -254,6 +298,7 @@ footer{border-top:1px solid var(--line);padding:16px 0 40px;font-size:13px;
       <input id="free" type="search" autocomplete="off" spellcheck="false"></div>
   </section>
 
+  <section id="cards"></section>
   <div id="out"></div>
 
   <div class="tabs" role="tablist">
@@ -268,6 +313,17 @@ footer{border-top:1px solid var(--line);padding:16px 0 40px;font-size:13px;
   <section class="panel" id="p-leads" role="tabpanel" hidden></section>
   <section class="panel" id="p-new" role="tabpanel" hidden></section>
 </main>
+
+<div id="guide" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="guide-title">
+    <div class="shead">
+      <span id="guide-title" data-t="guideBtn"></span>
+      <button class="tool" id="guide-dl" type="button" data-t="download"></button>
+      <button class="tool" id="guide-close" type="button" aria-label="close">&#10005;</button>
+    </div>
+    <div class="sbody" id="guide-body"></div>
+  </div>
+</div>
 
 <footer class="wrap">
   <div id="stamp"></div>
@@ -376,6 +432,13 @@ const STR = {
   dataMissP:  ["ملف <code>{f}.json</code> مش موجود. شغّل مهمة canval nightly مرة واحدة، وبعدين حدّث الصفحة.",
                "<code>{f}.json</code> is missing. Run the canval nightly job once, then reload."],
   devices:    ["جهاز", "devices"],
+  cardsHead:  ["أكتر ١٠ ملفات متركّبة", "The 10 most installed files"],
+  guideBtn:   ["دليل الاستخدام", "Guide"],
+  download:   ["تحميل", "Download"],
+  cardsLead:  ["دوس على أي واحدة تشوف بتدعم قرايات إيه.",
+               "Tap any one to see what it actually supports."],
+  generic:    ["بروتوكول عام", "generic protocol"],
+  anyYear:    ["كل السنوات", "any year"],
   devHead:    ["آخر ٣ أجهزة محدّثة على الملف ده",
                "The 3 most recently reporting devices on this file"],
   devNote:    ["افتح أي معرّف على البرو وقارن بنفسك. القيم دي خام زي ما وصلت من الجهاز.",
@@ -707,6 +770,43 @@ function renderFree(){
     + genericBlock(q);
 }
 
+/* A shortcut for the question people ask most: what is already out there
+   in numbers, and does it work? The cards are the fleet's own top ten, so
+   the first thing on screen is the fleet rather than an empty form. */
+function cards(){
+  const top = (state.fleet.top || []).slice(0, 10);
+  $("cards").innerHTML = `<h3 class="sec">${T("cardsHead")}</h3>
+    <p class="lead">${esc(T("cardsLead"))}</p>
+    <div class="cards">${top.map((c, n) => `
+      <button class="card" data-n="${n}">
+        <span class="cn">${bdi(c.mk || (c.g ? T("generic") : c.name))}</span>
+        <span class="cm">${bdi(c.md || (c.g ? c.name : ""))}</span>
+        <span class="cy">${c.y0 ? (c.y1 ? `${c.y0}\u2013${c.y1}` : `${c.y0}+`)
+                                : T("anyYear")}</span>
+        <span class="cd"><b>${c.devices.toLocaleString("en")}</b> ${T("devices")}</span>
+      </button>`).join("")}</div>`;
+}
+$("cards").addEventListener("click", e => {
+  const btn = e.target.closest(".card");
+  if(!btn) return;
+  const c = (state.fleet.top || [])[+btn.dataset.n];
+  if(!c) return;
+  if(c.mk && c.md){
+    // fill the pickers so the answer arrives the same way it would have
+    // if the three fields had been worked through by hand
+    $("mk").value = c.mk; state.models = modelsOf(c.mk);
+    $("md").value = c.md; $("md").disabled = false;
+    state.years = yearsOf(filesFor(c.mk, c.md));
+    $("yr").value = ""; $("yr").disabled = false; $("yr").placeholder = T("allYears");
+    state.pick = {mk:c.mk, md:c.md, yr:null}; state.free = "";
+    $("free").value = "";
+    renderPick();
+  }else{
+    $("free").value = c.name; renderFree();
+  }
+  $("out").scrollIntoView({behavior:"smooth", block:"start"});
+});
+
 /* ----------------------------------------------------------- panels */
 function panels(){
   const m = state.meta, f = state.fleet;
@@ -766,7 +866,7 @@ function paint(){
   $("md").placeholder = $("md").disabled ? T("dash") : T("pickAny");
   $("yr").placeholder = $("yr").disabled ? T("dash") : T("allYears");
   $("free").placeholder = T("missPh");
-  if(state.meta) panels();
+  if(state.meta){ panels(); cards(); }
   if(state.free) renderFree(); else renderPick();
 }
 
@@ -846,6 +946,112 @@ document.querySelectorAll(".tab").forEach(tab => {
       $(t.getAttribute("aria-controls")).hidden = !on;
     });
   });
+});
+
+
+/* ==================================================================
+   The manual. Written as data rather than markup so the same source
+   feeds the panel on screen and the file people download -- a guide
+   that drifts from the tool it explains is worse than none. */
+const GUIDE = {
+  title: ["دليل استخدام canval", "Using canval"],
+  intro: ["الأداة دي بتجاوب على سؤال واحد: العربية اللي العميل بيسأل عنها، هنقدر نقرا منها بيانات ولا لأ؟ والإجابة بتيجي من مكانين: كتالوج ملفات الكان عند Xirgo، والأجهزة المركّبة فعلًا في الأسطول.",
+          "This tool answers one question: the vehicle a customer is asking about — can we read data from it? The answer comes from two places: the Xirgo CAN file catalogue, and the devices actually installed across the fleet."],
+  sections: [
+    {h:["إزاي تستخدمها","How to use it"], b:[
+      ["اختار النوع، بعدين الموديل، بعدين السنة. القوايم كلها من الكتالوج نفسه، فأي عربية مش موجودة فيها معناها إن مفيش ليها ملف مخصص.",
+       "Pick the make, then the model, then the year. Every list comes from the catalogue itself, so a vehicle missing from it has no dedicated file."],
+      ["تقدر تكتب جوه أي قايمة عشان تفلترها بدل ما تنزل بالعجلة.",
+       "You can type inside any list to filter it instead of scrolling."],
+      ["لو العربية مش في القوايم أصلًا، اكتب اسمها في الخانة اللي تحت وهي هتوريك البروتوكول العام وإذا كان حد جرّبه على نفس النوع قبل كده.",
+       "If the vehicle is not in the lists at all, type its name in the field below and the page will show the generic protocol and whether anyone has already run that vehicle on it."],
+    ]},
+    {h:["يعني إيه الألوان","What the colours mean"], b:[
+      ["أخضر: مركّبة فعلًا، والمنصة شايفة منها إشارات. دي أقوى إجابة ممكنة — مش وعد كتالوج، ده جهاز حقيقي بيبعت.",
+       "Green: installed, and the platform sees signals coming back. The strongest answer there is — not a catalogue promise, a real device sending."],
+      ["أصفر: مركّبة وشغّالة، بس فحص الحساسات ما وصلهاش لسه. غالبًا هتتحول لأخضر مع المزامنة الجاية.",
+       "Amber: installed and reporting, but the sensor check has not reached it yet. It usually turns green after the next refresh."],
+      ["أحمر مع «البرو مش شايف إشارات»: دي أهم حالة — الملف مسند والأجهزة موجودة ومع ذلك مفيش حاجة بتوصل. تستاهل فحص فني.",
+       "Red with “no signals”: the important one — the file is assigned, the devices are there, and still nothing arrives. Worth a technician."],
+      ["أحمر مع «مش مركّب على أي جهاز»: الملف موجود في الكتالوج بس محدش ركّبه. جاهز للإسناد من المكتب من غير زيارة.",
+       "Red with “never installed”: the file exists but nobody has used it. Ready to assign from the desk, no visit needed."],
+    ]},
+    {h:["يعني إيه الأرقام","What the numbers mean"], b:[
+      ["جهاز مركّب: كام جهاز في الأسطول عليه الملف ده.",
+       "Devices fitted: how many devices in the fleet carry this file."],
+      ["نشط آخر ٣٠ يوم: كام منهم بعت حاجة في آخر شهر. الجهاز الساكت مش بيثبت ولا بينفي.",
+       "Active in 30 days: how many of them sent anything this month. A silent device neither proves nor disproves."],
+      ["ملف إعداد: في كام إعداد مختلف الملف ده معمول له إسناد.",
+       "Configurations: how many different configurations assign this file."],
+      ["إشارة واصلة: عدد الحساسات اللي المنصة قرأتها فعلًا من الأجهزة اللي اتفحصت.",
+       "Signals arriving: how many sensors the platform actually read from the sampled devices."],
+    ]},
+    {h:["التحقق بنفسك","Checking it yourself"], b:[
+      ["دوس على زرار الإشارات في أي سطر. هيفتحلك حاجتين: اللي الكتالوج واعد بيه، وتحته آخر ٣ أجهزة محدّثة بالمعرّف والقيم الواصلة منهم.",
+       "Tap the signals button on any row. It opens two things: what the catalogue declares, and below it the three most recently reporting devices with their identifiers and current values."],
+      ["خد أي معرّف من دول وافتحه على منصة أفاقي، وقارن بعينك. الفرق بين الاتنين هو بالظبط اللي الأداة اتعملت عشانه.",
+       "Take any of those identifiers, open it on the Afaqy platform, and compare. The gap between the two is exactly what this tool exists to show."],
+    ]},
+    {h:["التبويبات","The tabs"], b:[
+      ["الأسطول: توزيع الأجهزة كلها وأكتر الملفات استخدامًا.",
+       "Fleet: how all the devices break down, and the most used files."],
+      ["شغل جاهز: ترشيحات مقروءة من أسماء الإعدادات — أجهزة منفذها فاضي واسمها بيقول عربية عندنا ملفها، أو شغالة على العام ولها ملف مخصص. دي قراءات من نص كتبه الفنيين، فكل سطر محتاج نظرة قبل التحرك.",
+       "Ready work: leads read from configuration names — devices with an empty port named as a vehicle we cover, or on the generic when a dedicated file exists. These come from text installers typed, so each line needs a look before anyone moves."],
+      ["ملفات جديدة: عربيات بقى ليها ملفات في آخر شهر. حاجة المبيعات تتصل بالعميل عشانها.",
+       "New files: vehicles that gained a file in the last month. Something sales can call a customer about."],
+    ]},
+    {h:["البيانات جاية منين","Where the data comes from"], b:[
+      ["مهمة بتشتغل لوحدها كل ليلة: بتقرا الكتالوج من XDM، وتقرا إعدادات كل جهاز في الأسطول، وتسأل منصة أفاقي عن عيّنة أجهزة من كل ملف. تاريخ آخر تحديث مكتوب تحت الصفحة.",
+       "A job runs on its own every night: it reads the catalogue from XDM, reads every device's settings across the fleet, and asks the Afaqy platform about a sample of devices per file. The last refresh time is at the foot of the page."],
+      ["يعني الأرقام دي عمرها يوم على الأكتر، مش لحظية. للسؤال ده الفرق مش مهم.",
+       "So these numbers are at most a day old, not live. For this question that difference does not matter."],
+    ]},
+    {h:["حدود الأداة","What it will not tell you"], b:[
+      ["العيّنة ٦ أجهزة لكل ملف. لو الستة صادف إنهم واقفين، الملف هيبان كأنه مش بيبعت — والحكم ساعتها ظالم للملف.",
+       "The sample is six devices per file. If those six happen to be parked, the file will look silent — and that verdict is unfair to it."],
+      ["الأداة بتقول إيه اللي حصل، مش إيه اللي هيحصل. عربية ما اتركّبتش قبل كده ممكن تشتغل تمام، والتجربة الميدانية هي اللي بتحسم.",
+       "It reports what has happened, not what will. A vehicle nobody has fitted may work perfectly; only a field test settles that."],
+      ["السرعة وأطراف التوصيل ودليل التركيب مش بترجع من الواجهة الرسمية لـ Xirgo، فهي ناقصة في أغلب الملفات.",
+       "Bitrate, OBD pins and installation guides are not returned by the official Xirgo API, so they are missing on most files."],
+    ]},
+  ],
+};
+
+function guideHTML(){
+  const i = L();
+  return `<h2>${esc(GUIDE.title[i])}</h2><p class="gi">${esc(GUIDE.intro[i])}</p>`
+    + GUIDE.sections.map(s => `<h3>${esc(s.h[i])}</h3><ul>${
+        s.b.map(b => `<li>${esc(b[i])}</li>`).join("")}</ul>`).join("");
+}
+function openGuide(){
+  $("guide-body").innerHTML = guideHTML();
+  $("guide").hidden = false;
+  $("guide-close").focus();
+}
+function closeGuide(){ $("guide").hidden = true; $("help").focus(); }
+function downloadGuide(){
+  const i = L();
+  const page = `<!DOCTYPE html><html lang="${i ? "en" : "ar"}" dir="${i ? "ltr" : "rtl"}">
+<meta charset="utf-8"><title>${esc(GUIDE.title[i])}</title>
+<style>body{font:16px/1.7 "Segoe UI",system-ui,sans-serif;max-width:44em;
+margin:40px auto;padding:0 20px;color:#111}h2{font-size:26px;margin:0 0 6px}
+h3{font-size:17px;margin:26px 0 6px;border-bottom:1px solid #ddd;padding-bottom:4px}
+.gi{color:#555}ul{padding-inline-start:20px}li{margin-bottom:7px}
+footer{margin-top:34px;color:#777;font-size:13px}</style>
+${guideHTML()}<footer>canval — ${esc(state.meta ? state.meta.generated_at : "")}</footer>
+</html>`;
+  const url = URL.createObjectURL(new Blob([page], {type:"text/html;charset=utf-8"}));
+  const a = document.createElement("a");
+  a.href = url; a.download = i ? "canval-guide.html" : "canval-دليل-الاستخدام.html";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+$("help").addEventListener("click", openGuide);
+$("guide-close").addEventListener("click", closeGuide);
+$("guide-dl").addEventListener("click", downloadGuide);
+$("guide").addEventListener("click", e => { if(e.target.id === "guide") closeGuide(); });
+document.addEventListener("keydown", e => {
+  if(e.key === "Escape" && !$("guide").hidden) closeGuide();
 });
 
 /* Remembering the two switches is the whole point of having them: a
