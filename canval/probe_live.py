@@ -211,6 +211,9 @@ def main(argv=None) -> int:
 
         pro = Pro(token)
         views: dict[str, object] = {}
+        # the unit as the platform sent it, kept beside the parsed view for
+        # the handful of fields the adapter has no reason to model
+        raws: dict[str, dict] = {}
         calls = failed = 0
         for start in range(0, len(wanted), args.batch):
             batch = wanted[start:start + args.batch]
@@ -219,6 +222,7 @@ def main(argv=None) -> int:
                     view = parse_unit_view({"data": unit})
                     if view.imei:
                         views[str(view.imei)] = view
+                        raws[str(view.imei)] = unit
                 calls += 1
             except Exception as exc:                    # noqa: BLE001
                 failed += 1
@@ -244,9 +248,16 @@ def main(argv=None) -> int:
                     reporting += 1
                 for r in live:
                     tally[r["n"]] += 1
+                raw = raws.get(str(view.imei or "")) or {}
                 devices.append({
                     "i": str(view.imei or ""),
                     "u": view.name or "",
+                    # Who the device belongs to, so a lead can be taken to
+                    # the right customer without a second lookup. The
+                    # platform returns these as plain strings alongside the
+                    # unit; nothing is inferred here.
+                    "o": str(raw.get("owner") or ""),
+                    "cb": str(raw.get("creator") or ""),
                     "t": view.last_message or 0,
                     # every configured sensor, live or silent
                     "r": readings[:60],
