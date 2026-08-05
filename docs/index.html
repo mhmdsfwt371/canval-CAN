@@ -43,14 +43,17 @@ a{color:var(--canl)}
 @media(max-width:700px){.steps{grid-template-columns:1fr 1fr}.steps .clear{grid-column:2}}
 .step label{display:block;font-family:var(--mono);font-size:11.5px;
   color:var(--muted);margin-bottom:5px;letter-spacing:.04em}
-select{
+/* Inputs backed by a datalist rather than selects: hundreds of makes are
+   unusable in a native dropdown, and this keeps type-to-filter without
+   dragging in a picker library. */
+.pick{
   width:100%;font-family:var(--sans);font-size:16px;font-weight:500;
   padding:12px 12px;border:1.5px solid var(--ink);border-radius:2px;
-  background:var(--panel);color:var(--ink);cursor:pointer;
+  background:var(--panel);color:var(--ink);
 }
-select:disabled{border-color:var(--line);color:var(--muted);cursor:default;
-  background:var(--soft)}
-select:focus{outline:3px solid var(--canh);outline-offset:2px}
+.pick:disabled{border-color:var(--line);color:var(--muted);background:var(--soft)}
+.pick:focus{outline:3px solid var(--canh);outline-offset:2px}
+.pick::placeholder{color:#9AA4AC;font-weight:400}
 .clear{align-self:end}
 .clear button{font-family:var(--sans);font-size:14px;padding:12px 16px;
   border:1.5px solid var(--line);background:var(--panel);border-radius:2px;
@@ -77,6 +80,10 @@ select:focus{outline:3px solid var(--canh);outline-offset:2px}
   margin-top:7px;display:flex;gap:18px;flex-wrap:wrap}
 .verdict .nums b{color:var(--ink);font-size:16px;font-weight:600}
 .verdict p{margin:8px 0 0;font-size:14px;color:var(--muted)}
+.verdict .live{margin-top:10px;display:flex;gap:6px;flex-wrap:wrap}
+.lvl{font-family:var(--mono);font-size:11.5px;margin-top:2px}
+.lvl.ok{color:var(--canl)}
+.lvl.no{color:var(--alert)}
 
 /* ---------------- the list ---------------- */
 h3.sec{font-size:14px;font-weight:600;margin:24px 0 8px;letter-spacing:.01em;
@@ -160,11 +167,17 @@ footer code{font-family:var(--mono);font-size:12px}
   <h1>هل العربية دي مدعومة؟</h1>
   <div class="steps">
     <div class="step"><label for="mk">النوع</label>
-      <select id="mk"><option value="">— اختار —</option></select></div>
+      <input class="pick" id="mk" list="l-mk" autocomplete="off"
+             placeholder="اكتب أو اختار" aria-label="نوع العربية">
+      <datalist id="l-mk"></datalist></div>
     <div class="step"><label for="md">الموديل</label>
-      <select id="md" disabled><option value="">—</option></select></div>
+      <input class="pick" id="md" list="l-md" autocomplete="off" disabled
+             placeholder="—" aria-label="الموديل">
+      <datalist id="l-md"></datalist></div>
     <div class="step"><label for="yr">السنة</label>
-      <select id="yr" disabled><option value="">—</option></select></div>
+      <input class="pick" id="yr" list="l-yr" autocomplete="off" disabled
+             inputmode="numeric" placeholder="كل السنوات" aria-label="سنة الصنع">
+      <datalist id="l-yr"></datalist></div>
     <div class="clear"><button id="reset" type="button">مسح</button></div>
   </div>
   <div class="miss-line">مش لاقي العربية في القوايم؟ يبقى مالهاش ملف —
@@ -178,8 +191,8 @@ footer code{font-family:var(--mono);font-size:12px}
 
 <div class="tabs" role="tablist">
   <button class="tab" role="tab" id="t-fleet" aria-controls="p-fleet" aria-selected="true">الأسطول</button>
-  <button class="tab" role="tab" id="t-leads" aria-controls="p-leads" aria-selected="false">فرص شغل</button>
-  <button class="tab" role="tab" id="t-new" aria-controls="p-new" aria-selected="false">وصل جديد</button>
+  <button class="tab" role="tab" id="t-leads" aria-controls="p-leads" aria-selected="false">شغل جاهز</button>
+  <button class="tab" role="tab" id="t-new" aria-controls="p-new" aria-selected="false">ملفات جديدة</button>
 </div>
 <section class="panel" id="p-fleet" role="tabpanel"></section>
 <section class="panel" id="p-leads" role="tabpanel" hidden></section>
@@ -243,57 +256,43 @@ async function load(){
 }
 
 /* ------------------------------------------------------- the cascade */
+function fill(listId, values){
+  $(listId).innerHTML = values
+    .map(v => `<option value="${esc(v)}"></option>`).join("");
+}
 function buildMakes(){
-  const makes = new Map();
+  const makes = new Set();
   for(const v of state.v){
-    if(v.g) continue;                       // the generic protocols are a
-    const mk = v.mk || "";                  // path of their own, not a make
-    if(!mk) continue;
-    makes.set(mk, (makes.get(mk)||0)+1);
+    if(v.g || !v.mk) continue;   // the generic protocols are a path of
+    makes.add(v.mk);             // their own, not a manufacturer
   }
-  const sel = $("mk");
-  [...makes.keys()].sort().forEach(mk => {
-    const o = document.createElement("option");
-    o.value = mk; o.textContent = mk;
-    sel.appendChild(o);
-  });
+  state.makes = [...makes].sort();
+  fill("l-mk", state.makes);
 }
 function buildModels(mk){
-  const md = $("md");
-  md.innerHTML = '<option value="">— اختار —</option>';
-  const models = new Map();
+  const models = new Set();
   for(const v of state.v){
     if(v.g || v.mk !== mk) continue;
-    const key = v.md || v.n;
-    models.set(key, (models.get(key)||0)+1);
+    models.add(v.md || v.n);
   }
-  [...models.keys()].sort().forEach(m => {
-    const o = document.createElement("option");
-    o.value = m; o.textContent = m;
-    md.appendChild(o);
-  });
-  md.disabled = false;
+  state.models = [...models].sort();
+  fill("l-md", state.models);
+  $("md").disabled = false;
+  $("md").placeholder = state.models.length + " موديل";
 }
 function filesFor(mk, md){
   return state.v.filter(v => !v.g && v.mk === mk && (v.md || v.n) === md);
 }
 function buildYears(files){
-  const yr = $("yr");
-  yr.innerHTML = '<option value="">كل السنوات</option>';
   const years = new Set();
-  let open = false;
   for(const f of files){
-    if(!f.y0){ open = true; continue; }
+    if(!f.y0) continue;
     const to = f.y1 || THIS_YEAR;
     for(let y = f.y0; y <= to; y++) years.add(y);
   }
-  [...years].sort((a,b) => b-a).forEach(y => {
-    const o = document.createElement("option");
-    o.value = y; o.textContent = y;
-    yr.appendChild(o);
-  });
-  yr.disabled = false;
-  return {years, open};
+  fill("l-yr", [...years].sort((a,b) => b-a));
+  $("yr").disabled = false;
+  return years;
 }
 function coverYear(f, y){
   if(!y) return true;
@@ -322,10 +321,16 @@ function fileRow(f){
     f.r > 1 ? "rev "+f.r : null,
   ].filter(Boolean).join(" · ");
   const sN = (f.s||[]).length;
+  let live = "";
+  if(f.lv && f.lv.r)
+    live = `<div class="lvl ok">البرو: ${f.lv.r} من ${f.lv.k} جهاز بيطلّع
+            ${f.lv.s.length} إشارة</div>`;
+  else if(f.lv && f.lv.k)
+    live = `<div class="lvl no">البرو: ${f.lv.k} جهاز اتفحص، مفيش إشارات</div>`;
   return `<div class="li" data-id="${f.i}">
     ${pairSvg(f.b)}
     <div class="nm"><div class="t">${esc(f.n)}</div>
-      <div class="d">${esc(bits)}</div></div>
+      <div class="d">${esc(bits)}</div>${live}</div>
     ${num(f.f, "جهاز", true)}
     ${num(f.a, "نشط آخر ٣٠ يوم", true)}
     ${num(f.c, "ملف إعداد", true)}
@@ -343,30 +348,60 @@ function cfgRow(c){
   </div>`;
 }
 
+/* The ladder, in the order the question is really settled:
+   1. the platform saw signals            -> supported, proven
+   2. installed and reporting devices, no sensor check yet
+   3. installed, and the platform saw nothing at all  -> a real negative
+   4. catalogued but never installed
+   Live evidence beats install counts, because a file assigned to twenty
+   parked trucks proves less than one truck actually sending fuel level. */
+function liveOf(files){
+  const s = new Set(); let asked = 0, saw = 0, reporting = 0;
+  for(const f of files){
+    if(!f.lv) continue;
+    asked += f.lv.n || 0; saw += f.lv.k || 0; reporting += f.lv.r || 0;
+    (f.lv.s || []).forEach(x => s.add(x));
+  }
+  return {asked, saw, reporting, signals: [...s]};
+}
+
 function verdict(files, year){
   const inYear = files.filter(f => coverYear(f, year));
   const fitted = inYear.reduce((s,f) => s+f.f, 0);
   const active = inYear.reduce((s,f) => s+(f.a||0), 0);
   const cfgs   = inYear.reduce((s,f) => s+(f.c||0), 0);
+  const lv     = liveOf(inYear);
 
   if(year && !inYear.length){
     const ranges = [...new Set(files.map(f =>
       f.y0 ? (f.y1 ? `${f.y0}–${f.y1}` : `${f.y0}+`) : "كل السنوات"))].join("، ");
     return {cls:"bad", h:`سنة ${year} خارج تغطية الملفات الموجودة`,
       nums:null, p:`الملفات بتغطي: ${ranges}. جرّب سنة جواهم أو شوف العام تحت.`,
-      inYear: files};
+      inYear: files, lv};
   }
+  if(lv.reporting)
+    return {cls:"ok", h:"مدعومة — والبرو شايف منها إشارات",
+      nums:[[fitted,"جهاز مركّب"],[lv.reporting,"جهاز بيطلّع إشارات"],
+            [lv.signals.length,"إشارة واصلة"]],
+      p:null, inYear, lv};
+  if(fitted && lv.saw)
+    return {cls:"bad", h:"مركّبة، لكن البرو مش شايف منها أي إشارة",
+      nums:[[fitted,"جهاز مركّب"],[lv.saw,"جهاز اتفحص"],[cfgs,"ملف إعداد"]],
+      p:"دي أقوى إشارة على مشكلة: الملف مسند والأجهزة موجودة على المنصة ومع ذلك مفيش حساسات بتوصل. تستاهل فحص فني.",
+      inYear, lv};
   if(fitted && active)
-    return {cls:"ok", h:"مدعومة ومثبتة ميدانيًا",
+    return {cls:"warn", h:"مركّبة وشغّالة — التأكيد من البرو لسه",
       nums:[[fitted,"جهاز مركّب"],[active,"نشط آخر ٣٠ يوم"],[cfgs,"ملف إعداد"]],
-      p:null, inYear};
+      p:"الأجهزة بتبعت، بس فحص الحساسات ما وصلهاش لسه. هيتحدّث مع المزامنة الجاية.",
+      inYear, lv};
   if(fitted)
     return {cls:"warn", h:"مركّبة، لكن من غير نشاط آخر ٣٠ يوم",
       nums:[[fitted,"جهاز مركّب"],[cfgs,"ملف إعداد"]],
-      p:"الملف مسند فعلًا، لكن الأجهزة دي ساكتة من شهر. تعتبر غير مثبتة لحد ما جهاز منهم يتشاف على البرو.", inYear};
+      p:"الملف مسند فعلًا، لكن الأجهزة دي ساكتة من شهر.", inYear, lv};
   return {cls:"bad", h:"الملف موجود في الكتالوج، لكن مش مركّب على أي جهاز",
     nums:null,
-    p:"بحسب تعريفنا دي غير مدعومة فعليًا لحد أول تركيب ناجح. الملف جاهز للإسناد من المكتب.", inYear};
+    p:"بحسب تعريفنا دي غير مدعومة فعليًا لحد أول تركيب ناجح. الملف جاهز للإسناد من المكتب.",
+    inYear, lv};
 }
 
 function renderPick(){
@@ -380,6 +415,11 @@ function renderPick(){
   if(v.nums) html += `<div class="nums">${v.nums.map(([n,l]) =>
     `<span><b>${n}</b> ${l}</span>`).join("")}</div>`;
   if(v.p) html += `<p>${esc(v.p)}</p>`;
+  if(v.lv && v.lv.signals.length)
+    html += `<div class="live">${v.lv.signals.map(s =>
+      `<span class="s">${esc(s)}</span>`).join("")}</div>
+      <p style="margin-top:6px">دي الإشارات اللي البرو قراها فعلًا من الأجهزة
+        دي، مش اللي الكتالوج واعد بيه.</p>`;
   html += `</div>`;
 
   html += `<h3 class="sec">ملفات الكان — <b>${esc(mk)} ${esc(md)}</b></h3>
@@ -415,7 +455,8 @@ function genericBlock(query){
 function renderFree(){
   const q = $("free").value.trim();
   if(!q){ return; }
-  $("mk").value = ""; $("md").disabled = true; $("yr").disabled = true;
+  $("mk").value = $("md").value = $("yr").value = "";
+  $("md").disabled = $("yr").disabled = true;
   $("out").innerHTML =
     `<div class="verdict bad"><h2>مفيش ملف باسم «${esc(q)}»</h2>
      <p>مش موجودة في كتالوج Xirgo، فالسؤال بقى: العام هيشغّلها؟</p></div>`
@@ -490,23 +531,42 @@ function stamp(){
 }
 
 /* -------------------------------------------------------------- wires */
-$("mk").addEventListener("change", () => {
+/* Typed text only counts once it names something real, so a half-typed
+   make does not blank the answer already on screen. */
+const exact = (value, list) => list.find(x => x.toLowerCase() === value.trim().toLowerCase());
+
+function onMake(){
+  const mk = exact($("mk").value, state.makes || []);
   $("free").value = "";
-  $("yr").disabled = true; $("yr").innerHTML = "<option value=''>—</option>";
+  if(!mk){ return; }
+  $("mk").value = mk;
+  $("md").value = ""; $("yr").value = ""; $("yr").disabled = true;
   $("out").innerHTML = "";
-  if($("mk").value) buildModels($("mk").value);
-  else { $("md").disabled = true; }
-});
-$("md").addEventListener("change", () => {
-  if(!$("md").value) return;
-  buildYears(filesFor($("mk").value, $("md").value));
+  buildModels(mk);
+  $("md").focus();
+}
+function onModel(){
+  const mk = exact($("mk").value, state.makes || []);
+  const md = exact($("md").value, state.models || []);
+  if(!mk || !md) return;
+  $("md").value = md;
+  buildYears(filesFor(mk, md));
   renderPick();
+}
+["change","input"].forEach(ev => {
+  $("mk").addEventListener(ev, onMake);
+  $("md").addEventListener(ev, onModel);
+  $("yr").addEventListener(ev, () => {
+    const y = $("yr").value.trim();
+    if(y === "" || /^\d{4}$/.test(y)) renderPick();
+  });
 });
-$("yr").addEventListener("change", renderPick);
 $("reset").addEventListener("click", () => {
-  $("mk").value = ""; $("md").disabled = true; $("yr").disabled = true;
-  $("md").innerHTML = $("yr").innerHTML = "<option value=''>—</option>";
-  $("free").value = ""; $("out").innerHTML = "";
+  $("mk").value = $("md").value = $("yr").value = $("free").value = "";
+  $("md").disabled = $("yr").disabled = true;
+  $("md").placeholder = $("yr").placeholder = "—";
+  $("out").innerHTML = "";
+  $("mk").focus();
 });
 let ft;
 $("free").addEventListener("input", () => {

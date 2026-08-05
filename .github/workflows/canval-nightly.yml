@@ -14,6 +14,9 @@
 #     XDM_CLIENT_ID        external_afaqy_client
 #     XDM_CLIENT_SECRET    the rotated secret
 #     XDM_DOMAIN           eu
+#     AFAQY_TOKEN          the tracking platform token (optional; the job
+#                          skips the live check cleanly when it is absent
+#                          or expired)
 
 name: canval nightly
 
@@ -38,6 +41,7 @@ jobs:
       XDM_CLIENT_ID: ${{ secrets.XDM_CLIENT_ID }}
       XDM_CLIENT_SECRET: ${{ secrets.XDM_CLIENT_SECRET }}
       XDM_DOMAIN: ${{ secrets.XDM_DOMAIN }}
+      AFAQY_TOKEN: ${{ secrets.AFAQY_TOKEN }}
       CANVAL_DB: ${{ github.workspace }}/canval.db
       PYTHONIOENCODING: utf-8
 
@@ -62,14 +66,21 @@ jobs:
 
       - name: Refresh the catalogue and sweep the devices
         run: |
-         python -m canval.cli catalogue
-          python -m canval.cli index \
+          python -m canval.cli sync \
             --hardware 3 4 12 15 16 89 98 \
-            --verify 1 \
             --active-days 0
 
       - name: Read the configuration names for leads
         run: python -m canval.hints --limit 25
+
+      # Asks the tracking platform what a sample of devices is actually
+      # reporting, so the page can say "this file delivers fuel level"
+      # without a token ever reaching a browser. The Afaqy token is short
+      # lived; when it lapses this step says so and the rest of the job
+      # carries on with the catalogue and the install index.
+      - name: Check what the devices are really reporting
+        continue-on-error: true
+        run: python -m canval.probe_live --sample 6
 
       - name: Export the site data
         run: python -m canval.export_site --out docs/data

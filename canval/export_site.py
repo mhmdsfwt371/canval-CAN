@@ -67,6 +67,19 @@ def export_vehicles(conn) -> list[dict]:
     twice the size, and every byte here is downloaded by every person who
     opens the page.
     """
+    live = {}
+    if conn.execute("SELECT name FROM sqlite_master "
+                    "WHERE name='file_live'").fetchone():
+        for r in conn.execute(
+                """SELECT file_id, sampled, answered, reporting, signals
+                     FROM file_live"""):
+            try:
+                names = list(json.loads(r["signals"] or "{}").keys())
+            except ValueError:
+                names = []
+            live[r["file_id"]] = {"n": r["sampled"], "k": r["answered"],
+                                  "r": r["reporting"], "s": names[:24]}
+
     fitted, active, configs = {}, {}, {}
     for r in conn.execute(
             f"""SELECT file_id, COUNT(DISTINCT imei) n,
@@ -107,6 +120,8 @@ def export_vehicles(conn) -> list[dict]:
             entry["c"] = configs[row["file_id"]]
         if _is_generic(entry["n"]):
             entry["g"] = 1
+        if row["file_id"] in live:
+            entry["lv"] = live[row["file_id"]]
         # Only carry what is actually set. Thousands of nulls cost more
         # than the branches needed to skip them.
         for key, value in (("v", row["vmid"]), ("mk", row["make"]),
