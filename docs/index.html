@@ -359,7 +359,7 @@ const esc = s => (s ?? "").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;")
    the page may be Arabic, and only an isolate keeps them whole. */
 const bdi = s => `<bdi dir="${/[\u0600-\u06FF]/.test(s ?? "") ? "rtl" : "ltr"}">${esc(s)}</bdi>`;
 const THIS_YEAR = new Date().getFullYear();
-const VERSION = "1.1";
+const VERSION = "1.2";
 const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"ar"};
 
 /* What changed, and when. Kept beside the code rather than in a document
@@ -368,6 +368,10 @@ const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"a
    about. Newest first. The rule that goes with it: a new version adds,
    it does not quietly change what already worked. */
 const CHANGES = [
+  {v:"1.2", d:"2026-08-05", items:[
+    ["لما تختار سنة، الملف المعمول للسنة دي بيتعرض لوحده، والملفات الأقدم اللي بتغطيها بالصدفة بتنزل تحت في قسم منفصل. قبل كده كانوا مخلوطين.",
+     "Picking a year now shows the file built for that year on its own, with older files that merely reach it in a separate section below. They used to be mixed together."],
+  ]},
   {v:"1.1", d:"2026-08-05", items:[
     ["كل جهاز بقى بيعرض الحساب والشخص اللي أنشأه.",
      "Each device now shows its account and who created it."],
@@ -442,6 +446,10 @@ const STR = {
                "These are signals the platform actually read from those devices, not what the catalogue promises."],
   filesFor:   ["ملفات الكان —", "CAN files —"],
   noFiles:    ["مفيش ملفات", "No files"],
+  bestFor:    ["الملفات المخصوصة لسنة {y}", "Files made for {y}"],
+  widerFor:   ["ملفات أوسع بتغطي {y} كمان", "Wider files that also cover {y}"],
+  widerNote:  ["دي بداياتها أقدم، فهي بتغطي سنة {y} بس مش معمولة ليها. تنفع لو المخصوص ما اشتغلش.",
+               "These start earlier, so they cover {y} without being made for it. Worth trying if the closer file fails."],
   proOk:      ["البرو: {r} من {k} جهاز بيطلّع {s} إشارة",
                "Platform: {r} of {k} devices reporting {s} signals"],
   proNo:      ["البرو: {k} جهاز اتفحص، مفيش إشارات",
@@ -767,6 +775,22 @@ function verdict(files, year){
   return {cls:"bad", h:T("vNever"), nums:null, p:T("vNeverP"), inYear, lv};
 }
 
+/* A file with no end year covers every year after its start, so asking
+   for 2022 legitimately matches both "SUBURBAN [13+]" and "[22+]".
+   Legitimate but misleading: one was built for the year asked about and
+   the other merely reaches it. Splitting them keeps both -- the older
+   file is still the fallback when the closer one fails -- while making it
+   obvious which is which. */
+function splitByFit(files, year){
+  if(!year) return [files, []];
+  const dated = files.filter(f => f.y0);
+  if(!dated.length) return [files, []];
+  const newest = Math.max(...dated.map(f => f.y0));
+  const best = files.filter(f => !f.y0 || f.y0 === newest);
+  const wider = files.filter(f => f.y0 && f.y0 !== newest);
+  return wider.length ? [best, wider] : [files, []];
+}
+
 function renderPick(){
   const {mk, md, yr} = state.pick || {};
   if(!mk || !md){ if(!state.free) $("out").innerHTML = ""; return; }
@@ -783,9 +807,15 @@ function renderPick(){
       <p style="margin-top:6px">${esc(T("liveNote"))}</p>`;
   html += `</div>`;
 
-  html += `<h3 class="sec">${T("filesFor")} <b>${bdi(mk + " " + md)}</b></h3>
-    <div class="list">${v.inYear.map(fileRow).join("") ||
+  const [best, wider] = splitByFit(v.inYear, yr ? +yr : null);
+  html += `<h3 class="sec">${wider.length ? T("bestFor",{y:yr}) : T("filesFor")}
+      <b>${bdi(mk + " " + md)}</b></h3>
+    <div class="list">${best.map(fileRow).join("") ||
       `<div class="empty">${T("noFiles")}</div>`}</div>`;
+  if(wider.length)
+    html += `<h3 class="sec">${T("widerFor",{y:yr})}</h3>
+      <div class="list">${wider.map(fileRow).join("")}</div>
+      <div class="note">${esc(T("widerNote",{y:yr}))}</div>`;
   if(!v.inYear.some(f => f.f)) html += genericBlock(mk+" "+md);
   $("out").innerHTML = html;
 }

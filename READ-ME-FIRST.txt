@@ -1,25 +1,27 @@
-canval v1.1
+canval v1.2
 ===========
 
-Unzip over D:\canval. Three files, no sample data:
+One file. Unzip over D:\canval:
 
-    docs/index.html            the page
-    canval/probe_live.py       nightly platform check
-    canval/export_site.py      writes the JSON the page reads
-
-Then:
+    docs/index.html
 
     cd D:\canval
     git pull --no-rebase
     git add -A
-    git commit -m "canval v1.1"
+    git commit -m "canval v1.2"
     git push
 
-Then run canval nightly once from the Actions tab. Both new things in
-this version come from that job, so the page cannot show them until it
-has run:
+No sync needed -- this version only changes how the page arranges what is
+already there.
 
-  - every sensor configured on a device, marked live or silent
-  - the account each device sits under, and who created it
+What changed
+------------
+Picking a year used to list every file whose range reached it, so asking
+about a 2022 Suburban showed both "[13+]" and "[22+]" in one list, as if
+they were equal answers. They are not: one was built for that year and
+the other merely extends into it.
 
-v1.0 -> v1.1 adds only. Nothing that worked before behaves differently.
+The file built for the chosen year now stands on its own, and the older
+files sit below under "wider files that also cover it". Nothing is
+hidden -- the older file is still the fallback when the closer one fails
+-- but it is no longer presented as the same thing.
