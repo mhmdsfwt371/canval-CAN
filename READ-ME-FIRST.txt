@@ -1,0 +1,26 @@
+canval v1.0
+===========
+
+Two files, no sample data. Unzip over D:\canval:
+
+    docs/index.html            the page
+    canval/probe_live.py       nightly platform check
+    canval/export_site.py      writes the JSON the page reads
+
+There is deliberately no docs/data/ in this archive. Earlier bundles
+carried sample JSON so the page had something to show before the first
+sync, and unzipping them overwrote the real numbers -- 60 files and 3000
+devices instead of 3934 and 25089, with invented IMEIs. That will not
+happen again: the data now only ever comes from the nightly job.
+
+Then:
+
+    cd D:\canval
+    git pull --no-rebase
+    git add -A
+    git commit -m "canval v1.0"
+    git push
+
+Then run canval nightly once from the Actions tab. The sensor list per
+device changed shape in this version, so the page needs one refresh
+before it can show it.

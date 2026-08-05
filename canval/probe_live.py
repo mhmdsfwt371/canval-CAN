@@ -124,21 +124,36 @@ class Pro:
 
 
 def readings_of(view) -> list[dict]:
-    """Named sensors with the value the platform currently holds.
+    """Every sensor configured on the unit, carrying a value or not.
 
-    Named only: a bare key like sensor_12289 is a wire-level value with no
-    sensor configured against it, and nobody asked whether sensor_12289
-    works. The raw value is carried through rather than converted here --
-    the conversion lives in the payload and belongs to the adapter.
+    A configured sensor with nothing arriving is not noise to be filtered
+    out -- it is the most useful line on the page. "Fuel Level is set up
+    on this unit and silent" is a different fact from "Fuel Level was
+    never set up", and only the first one means somebody should look at
+    the install. So the list is the unit's own sensor definitions, and the
+    value is attached where one exists.
+
+    Bare parameter keys like sensor_12289 stay out: those are wire-level
+    values with no sensor configured against them, so there is nothing for
+    a reader to recognise and nobody asked whether sensor_12289 works.
+
+    Values are carried raw. The conversion lives in the payload and
+    belongs to the adapter, not here.
     """
     seen = {p.key: p for p in view.parameters if p.value not in (None, "")}
     out = []
     for s in view.specs:
-        p = seen.get(s.param) if s.param else None
-        if p is None or not s.name:
+        if not s.name:
             continue
-        out.append({"n": s.name, "v": p.value, "t": p.changed_at})
-    return sorted(out, key=lambda r: r["n"])
+        p = seen.get(s.param) if s.param else None
+        entry = {"n": s.name}
+        if p is not None:
+            entry["v"] = p.value
+            entry["t"] = p.changed_at
+        out.append(entry)
+    # Live ones first, then the silent ones: the eye should land on what
+    # is working before it reaches what is not.
+    return sorted(out, key=lambda r: ("v" not in r, r["n"]))
 
 
 def signals_of(view) -> list[str]:
@@ -224,15 +239,17 @@ def main(argv=None) -> int:
             devices = []
             for view in answered:
                 readings = readings_of(view)
-                if readings:
+                live = [r for r in readings if "v" in r]
+                if live:
                     reporting += 1
-                for r in readings:
+                for r in live:
                     tally[r["n"]] += 1
                 devices.append({
                     "i": str(view.imei or ""),
                     "u": view.name or "",
                     "t": view.last_message or 0,
-                    "r": readings[:40],
+                    # every configured sensor, live or silent
+                    "r": readings[:60],
                 })
             # Newest first: the three at the top are the ones worth opening
             # to check a file by hand.

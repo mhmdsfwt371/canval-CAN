@@ -44,6 +44,8 @@ body{background:var(--paper);color:var(--ink);font-family:var(--sans);
   padding-top:12px;padding-bottom:12px}
 .brand{font-weight:700;letter-spacing:-.02em;font-size:19px}
 .brand span{color:var(--muted);font-weight:500;font-size:15px}
+.brand .v{font-family:var(--mono);font-size:11.5px;font-weight:600;
+  color:var(--canh);vertical-align:2px}
 .gauges{margin-inline-start:auto;display:flex;gap:18px;flex-wrap:wrap}
 .gauge{font-family:var(--mono);font-size:12.5px;color:var(--muted);white-space:nowrap}
 .gauge b{color:var(--ink);font-weight:600;font-size:14px}
@@ -167,6 +169,11 @@ bdi{unicode-bidi:isolate}
 .dhead .when{margin-inline-start:auto;font-family:var(--mono);font-size:11.5px;
   color:var(--muted)}
 .dev .s b{font-family:var(--mono);font-weight:600;margin-inline-start:4px}
+/* Configured but silent: present enough to read, quiet enough that the
+   working ones are what the eye lands on. */
+.s.quiet{background:transparent;color:var(--muted);border-color:var(--line)}
+.s.quiet b{font-weight:400;opacity:.8}
+.dcount{font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:6px}
 .s{font-size:12.5px;padding:3px 9px;border-radius:2px;background:var(--chip);
   color:var(--chipT);border:1px solid var(--chipL)}
 .s.no{background:var(--chipN);color:var(--chipNT);border-color:var(--chipNL)}
@@ -197,6 +204,15 @@ bdi{unicode-bidi:isolate}
 .sbody .gi{color:var(--muted);font-size:14.5px;margin:0}
 .sbody ul{margin:0;padding-inline-start:20px}
 .sbody li{margin-bottom:7px;font-size:14.5px}
+.sbody .ver{font-family:var(--mono);font-size:13px;color:var(--muted);
+  font-weight:600;letter-spacing:0}
+.rel{border-inline-start:2px solid var(--line);padding-inline-start:12px;
+  margin-bottom:14px}
+.rel.new{border-inline-start-color:var(--canh)}
+.relh{display:flex;gap:10px;align-items:baseline;margin-bottom:4px}
+.relh b{font-family:var(--mono);font-size:14px}
+.rel.new .relh b{color:var(--canh)}
+.relh span{font-family:var(--mono);font-size:11.5px;color:var(--muted)}
 @media(prefers-reduced-motion:no-preference){
   .sheet{animation:rise .18s ease-out both}
 }
@@ -250,7 +266,8 @@ footer{border-top:1px solid var(--line);padding:16px 0 40px;font-size:13px;
 <body>
 
 <div class="bar"><div class="wrap">
-  <div class="brand">canval <span data-t="tag"></span></div>
+  <div class="brand">canval <span class="v" id="ver"></span>
+    <span data-t="tag"></span></div>
   <div class="gauges" id="gauges"></div>
   <div class="tools">
     <button class="tool" id="help" type="button" data-t="guideBtn"></button>
@@ -339,7 +356,26 @@ const esc = s => (s ?? "").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;")
    the page may be Arabic, and only an isolate keeps them whole. */
 const bdi = s => `<bdi dir="${/[\u0600-\u06FF]/.test(s ?? "") ? "rtl" : "ltr"}">${esc(s)}</bdi>`;
 const THIS_YEAR = new Date().getFullYear();
+const VERSION = "1.0";
 const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"ar"};
+
+/* What changed, and when. Kept beside the code rather than in a document
+   somebody has to remember to open: the guide reads this list, so a
+   feature that ships without a line here is a feature nobody is told
+   about. Newest first. The rule that goes with it: a new version adds,
+   it does not quietly change what already worked. */
+const CHANGES = [
+  {v:"1.0", d:"2026-08-05", items:[
+    ["أول نسخة مرقّمة. القوايم المتسلسلة، والحكم المبني على التركيب الفعلي، وفحص البرو الليلي، وآخر ٣ أجهزة بحساساتهم.",
+     "First numbered release. Cascading pickers, a verdict based on real installs, the nightly platform check, and the three most recent devices with their sensors."],
+    ["كل الحساسات المعرّفة على الجهاز بقت بتظهر — اللي واصل بقيمته واللي ساكت من غير قيمة.",
+     "Every sensor configured on a device is now listed — the ones arriving with their value, the silent ones marked as silent."],
+    ["دليل الاستخدام جوه الصفحة، بالعربي والإنجليزي، وينفع يتحمّل.",
+     "The guide lives in the page, in Arabic and English, and can be downloaded."],
+    ["كروت لأكتر ١٠ ملفات متركّبة، الضغط عليها بيوديك للنتيجة على طول.",
+     "Cards for the ten most installed files; tapping one goes straight to its result."],
+  ]},
+];
 
 /* ==================================================================== i18n
    Both languages are written out rather than shaped from one, so the
@@ -446,6 +482,8 @@ const STR = {
   declared:   ["الإشارات المعلنة في الكتالوج", "Signals the catalogue declares"],
   noDevices:  ["مفيش أجهزة اتفحصت على الملف ده لسه.",
                "No devices have been checked on this file yet."],
+  silent:     ["ساكت", "silent"],
+  liveCount:  ["{n} من {t} حساس بيوصل", "{n} of {t} sensors arriving"],
   now:        ["دلوقتي", "just now"],
 };
 const L = () => state.lang === "ar" ? 0 : 1;
@@ -856,6 +894,7 @@ function panels(){
 /* ------------------------------------------------------- paint / lang */
 function paint(){
   const ar = state.lang === "ar";
+  $("ver").textContent = "v" + VERSION;
   document.documentElement.lang = ar ? "ar" : "en";
   document.documentElement.dir = ar ? "rtl" : "ltr";
   $("lang").textContent = ar ? "EN" : "عربي";
@@ -921,9 +960,12 @@ function detail(f){
         ${d.u ? `<span class="unit">${bdi(d.u)}</span>` : ""}
         <span class="when">${esc(since(d.t))}</span>
       </div>
-      <div class="chips">${(d.r||[]).map(r =>
-        `<span class="s">${bdi(r.n)} <b>${esc(r.v)}</b></span>`).join("")
-        || `<span class="s no">${T("noSig")}</span>`}</div>
+      <div class="dcount">${T("liveCount", {
+        n:(d.r||[]).filter(r => r.v !== undefined).length, t:(d.r||[]).length})}</div>
+      <div class="chips">${(d.r||[]).map(r => r.v !== undefined
+        ? `<span class="s">${bdi(r.n)} <b>${esc(r.v)}</b></span>`
+        : `<span class="s quiet">${bdi(r.n)} <b>${T("silent")}</b></span>`
+      ).join("") || `<span class="s no">${T("noSig")}</span>`}</div>
     </div>`).join("")
     : `<div class="empty">${T("noDevices")}</div>`;
   if(devs.length) html += `<div class="note">${esc(T("devNote"))}</div>`;
@@ -955,6 +997,7 @@ document.querySelectorAll(".tab").forEach(tab => {
    that drifts from the tool it explains is worse than none. */
 const GUIDE = {
   title: ["دليل استخدام canval", "Using canval"],
+  whatsNew: ["الجديد في كل نسخة", "What changed in each version"],
   intro: ["الأداة دي بتجاوب على سؤال واحد: العربية اللي العميل بيسأل عنها، هنقدر نقرا منها بيانات ولا لأ؟ والإجابة بتيجي من مكانين: كتالوج ملفات الكان عند Xirgo، والأجهزة المركّبة فعلًا في الأسطول.",
           "This tool answers one question: the vehicle a customer is asking about — can we read data from it? The answer comes from two places: the Xirgo CAN file catalogue, and the devices actually installed across the fleet."],
   sections: [
@@ -991,6 +1034,8 @@ const GUIDE = {
        "Tap the signals button on any row. It opens two things: what the catalogue declares, and below it the three most recently reporting devices with their identifiers and current values."],
       ["خد أي معرّف من دول وافتحه على منصة أفاقي، وقارن بعينك. الفرق بين الاتنين هو بالظبط اللي الأداة اتعملت عشانه.",
        "Take any of those identifiers, open it on the Afaqy platform, and compare. The gap between the two is exactly what this tool exists to show."],
+      ["الحساسات المعرّفة على الجهاز كلها بتظهر: اللي واصل بقيمته، واللي مكتوب جنبه «ساكت» يبقى معرّف على الوحدة ومفيش حاجة بتوصل منه. الفرق ده هو اللي بيفرّق بين تركيب ناقص وحساس مش متعرّف أصلًا.",
+       "Every sensor configured on the device is listed: the ones arriving show their value, and the ones marked “silent” are set up on the unit with nothing coming through. That difference is what separates an incomplete install from a sensor that was never configured."],
     ]},
     {h:["التبويبات","The tabs"], b:[
       ["الأسطول: توزيع الأجهزة كلها وأكتر الملفات استخدامًا.",
@@ -1019,9 +1064,14 @@ const GUIDE = {
 
 function guideHTML(){
   const i = L();
-  return `<h2>${esc(GUIDE.title[i])}</h2><p class="gi">${esc(GUIDE.intro[i])}</p>`
+  return `<h2>${esc(GUIDE.title[i])} <span class="ver">v${VERSION}</span></h2>
+    <p class="gi">${esc(GUIDE.intro[i])}</p>`
     + GUIDE.sections.map(s => `<h3>${esc(s.h[i])}</h3><ul>${
-        s.b.map(b => `<li>${esc(b[i])}</li>`).join("")}</ul>`).join("");
+        s.b.map(b => `<li>${esc(b[i])}</li>`).join("")}</ul>`).join("")
+    + `<h3>${esc(GUIDE.whatsNew[i])}</h3>`
+    + CHANGES.map((c, n) => `<div class="rel${n ? "" : " new"}">
+        <div class="relh"><b>v${esc(c.v)}</b><span>${esc(c.d)}</span></div>
+        <ul>${c.items.map(x => `<li>${esc(x[i])}</li>`).join("")}</ul></div>`).join("");
 }
 function openGuide(){
   $("guide-body").innerHTML = guideHTML();
@@ -1037,8 +1087,12 @@ function downloadGuide(){
 margin:40px auto;padding:0 20px;color:#111}h2{font-size:26px;margin:0 0 6px}
 h3{font-size:17px;margin:26px 0 6px;border-bottom:1px solid #ddd;padding-bottom:4px}
 .gi{color:#555}ul{padding-inline-start:20px}li{margin-bottom:7px}
+.ver{font:600 14px monospace;color:#777}
+.rel{border-inline-start:2px solid #ddd;padding-inline-start:12px;margin-bottom:14px}
+.relh{display:flex;gap:10px;align-items:baseline}.relh b{font:600 14px monospace}
+.relh span{font:11px monospace;color:#888}
 footer{margin-top:34px;color:#777;font-size:13px}</style>
-${guideHTML()}<footer>canval — ${esc(state.meta ? state.meta.generated_at : "")}</footer>
+${guideHTML()}<footer>canval v${VERSION} — ${esc(state.meta ? state.meta.generated_at : "")}</footer>
 </html>`;
   const url = URL.createObjectURL(new Blob([page], {type:"text/html;charset=utf-8"}));
   const a = document.createElement("a");
