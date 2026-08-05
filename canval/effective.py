@@ -1,4 +1,4 @@
-﻿"""Which CAN file a device actually runs -- inherited values included.
+"""Which CAN file a device actually runs -- inherited values included.
 
 WHY THIS MODULE EXISTS
 ----------------------
