@@ -3,7 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>canval</title>
+<title>canval — دعم الكان</title>
+<!-- Preview and icon are drawn here rather than fetched: a shared link
+     should show something recognisable without the repository carrying
+     image files that then have to be kept in step with the design. -->
+<meta name="description" content="هل العربية دي مدعومة؟ إجابة من كتالوج ملفات الكان ومن الأجهزة المركّبة فعلًا في الأسطول.">
+<meta property="og:title" content="canval — دعم الكان">
+<meta property="og:description" content="هل العربية دي مدعومة؟ إجابة من كتالوج ملفات الكان ومن الأجهزة المركّبة فعلًا في الأسطول.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="preview.svg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#101619">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23101619'/%3E%3Cg fill='none' stroke-width='5' stroke-linecap='round'%3E%3Cpath d='M8 22c8 0 8 20 16 20s8-20 16-20 8 20 16 20' stroke='%23E0A106'/%3E%3Cpath d='M8 42c8 0 8-20 16-20s8 20 16 20 8-20 16-20' stroke='%2312734A'/%3E%3C/g%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -367,7 +378,7 @@ const esc = s => (s ?? "").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;")
    the page may be Arabic, and only an isolate keeps them whole. */
 const bdi = s => `<bdi dir="${/[\u0600-\u06FF]/.test(s ?? "") ? "rtl" : "ltr"}">${esc(s)}</bdi>`;
 const THIS_YEAR = new Date().getFullYear();
-const VERSION = "1.3";
+const VERSION = "1.5";
 const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"ar"};
 
 /* What changed, and when. Kept beside the code rather than in a document
@@ -376,6 +387,16 @@ const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"a
    about. Newest first. The rule that goes with it: a new version adds,
    it does not quietly change what already worked. */
 const CHANGES = [
+  {v:"1.5", d:"2026-08-05", items:[
+    ["الكارت بيتقفل لما تدوس عليه تاني، وبيفضل متحدد بالأخضر طول ما نتيجته على الشاشة. في 1.3 التحديد ده اتكتب وما اتحفظش، فالكارت كان بيفتح من غير ما يبان إنه مفتوح.",
+     "A card closes when tapped a second time, and stays marked green for as long as its answer is on screen. In 1.3 that highlight was written but never saved, so a card would open without showing that it had."],
+  ]},
+  {v:"1.4", d:"2026-08-05", items:[
+    ["الدليل فيه دلوقتي قسم «الخطوة الجاية بعد الإجابة» — إمتى تركّب على طول وإمتى ترجع لـ R&D الأول — وقسم أسئلة بتتكرر.",
+     "The guide now has a section on what to do with each answer — when to install straight away and when to go back to R&D first — plus a list of recurring questions."],
+    ["لما تبعت لينك الصفحة في واتساب أو غيره، بقى يظهر بأيقونة ووصف بدل لينك فاضي.",
+     "Sharing the page's link now shows an icon and a description instead of a bare URL."],
+  ]},
   {v:"1.3", d:"2026-08-05", items:[
     ["الكارت المختار بقى متحدد وأنت شايف نتيجته، وفيه زرار رجوع فوق النتيجة. قبل كده مكنش فيه طريقة واضحة تقفل بيها غير إنك تدوس على نفس الكارت تاني.",
      "The chosen card stays marked while its answer is on screen, and there is a Back button above the result. Before this the only way out was tapping the same card again."],
@@ -500,6 +521,8 @@ const STR = {
   download:   ["تحميل", "Download"],
   cardsLead:  ["دوس على أي واحدة تشوف بتدعم قرايات إيه.",
                "Tap any one to see what it actually supports."],
+  back:       ["رجوع", "Back"],
+  cardOpen:   ["دوس تاني تقفلها", "Tap again to close"],
   generic:    ["بروتوكول عام", "generic protocol"],
   anyYear:    ["كل السنوات", "any year"],
   devHead:    ["آخر ٣ أجهزة محدّثة على الملف ده",
@@ -868,7 +891,9 @@ function cards(){
   $("cards").innerHTML = `<h3 class="sec">${T("cardsHead")}</h3>
     <p class="lead">${esc(T("cardsLead"))}</p>
     <div class="cards">${top.map((c, n) => `
-      <button class="card" data-n="${n}">
+      <button class="card${state.cardOn === n ? " on" : ""}" data-n="${n}"
+              aria-pressed="${state.cardOn === n}"
+              title="${state.cardOn === n ? T("cardOpen") : ""}">
         <span class="cn">${bdi(c.mk || (c.g ? T("generic") : c.name))}</span>
         <span class="cm">${bdi(c.md || (c.g ? c.name : ""))}</span>
         <span class="cy">${c.y0 ? (c.y1 ? `${c.y0}\u2013${c.y1}` : `${c.y0}+`)
@@ -879,8 +904,17 @@ function cards(){
 $("cards").addEventListener("click", e => {
   const btn = e.target.closest(".card");
   if(!btn) return;
-  const c = (state.fleet.top || [])[+btn.dataset.n];
+  const n = +btn.dataset.n;
+  const c = (state.fleet.top || [])[n];
   if(!c) return;
+
+  // A card that is already showing its answer closes on a second tap.
+  // That is what people reach for first, and expecting them to find a
+  // separate button for it was the wrong way round.
+  if(state.cardOn === n){ clearAll(); return; }
+
+  state.cardOn = n;
+  cards();
   if(c.mk && c.md){
     // fill the pickers so the answer arrives the same way it would have
     // if the three fields had been worked through by hand
@@ -963,7 +997,10 @@ function paint(){
 
 /* -------------------------------------------------------------- wires */
 const cMk = combo("mk", {items: () => state.makes, pick: v => {
-  state.pick = {mk:v}; state.free = ""; state.cardOn = null; cards();
+  state.pick = {mk:v}; state.free = "";
+  if(state.cardOn !== null && state.cardOn !== undefined){
+    state.cardOn = null; cards();
+  }
   state.models = modelsOf(v);
   $("md").disabled = false; $("md").value = ""; $("md").placeholder = T("pickAny");
   $("yr").disabled = true;  $("yr").value = ""; $("yr").placeholder = T("dash");
@@ -981,15 +1018,17 @@ const cYr = combo("yr", {items: () => state.years || [], pick: v => {
   renderPick();
 }});
 
-$("reset").addEventListener("click", () => {
-  state.pick = null; state.free = ""; state.cardOn = null; cards();
+function clearAll(focus){
+  state.pick = null; state.free = ""; state.cardOn = null;
+  if(state.fleet) cards();
   [cMk,cMd,cYr].forEach(c => c.clear());
   $("free").value = "";
   $("md").disabled = $("yr").disabled = true;
   $("md").placeholder = $("yr").placeholder = T("dash");
   $("out").innerHTML = "";
-  $("mk").focus();
-});
+  if(focus) $("mk").focus();
+}
+$("reset").addEventListener("click", () => clearAll(true));
 let ft;
 $("free").addEventListener("input", () => {
   clearTimeout(ft); ft = setTimeout(renderFree, 200);
@@ -1029,7 +1068,7 @@ function detail(f){
 }
 $("out").addEventListener("click", e => {
   if(e.target.closest("#back")){
-    $("reset").click();
+    clearAll();
     $("cards").scrollIntoView({behavior:"smooth", block:"start"});
     return;
   }
@@ -1114,7 +1153,33 @@ const GUIDE = {
       ["يعني الأرقام دي عمرها يوم على الأكتر، مش لحظية. للسؤال ده الفرق مش مهم.",
        "So these numbers are at most a day old, not live. For this question that difference does not matter."],
     ]},
-    {h:["حدود الأداة","What it will not tell you"], b:[
+    {h:["الخطوة الجاية بعد الإجابة","What to do with the answer"], b:[
+    ["أخضر — مدعومة والبرو شايف إشارات: ركّب على طول. الملف اشتغل على أجهزة حقيقية في نفس الأسطول، والمبيعات تقدر تأكد للعميل بالإشارات المذكورة بالاسم.",
+     "Green — supported with signals arriving: go ahead and install. The file has worked on real devices in this same fleet, and sales can promise the customer the signals listed by name."],
+    ["أصفر — مركّبة والتأكيد لسه: ركّب، بس متوعدش العميل بإشارة معيّنة قبل ما تتأكد. الفحص الليلي هيوصلها خلال يوم أو يومين.",
+     "Amber — installed, confirmation pending: install, but do not promise a specific signal until it is confirmed. The nightly check will reach it within a day or two."],
+    ["أحمر — البرو مش شايف إشارات: متركّبش قبل ما ترجع لفريق R&D. الملف مسند على أجهزة ومفيش حاجة بتوصل، فده عطل معروف مش عربية جديدة.",
+     "Red — nothing arriving: do not install before going back to R&D. The file is assigned on devices and nothing comes through, so this is a known fault rather than a new vehicle."],
+    ["أحمر — مش مركّبة على أي جهاز: دي حالة تحتاج R&D قبل أي وعد للعميل. الملف موجود في الكتالوج لكن محدش جربه، والتجربة الميدانية الأولى هي اللي تحسم.",
+     "Red — never installed: this needs R&D before anything is promised. The file is in the catalogue but nobody has tried it, and the first field test is what settles it."],
+    ["مفيش ملف خالص: شوف البروتوكول العام تحت. لو مركبة تقيلة، احتمال نجاحه كبير. لو عربية ركاب، ارجع لـ R&D — الوعد من غير تجربة هو اللي بيولّد الزيارات الفاشلة.",
+     "No file at all: check the generic protocol below. On a heavy vehicle it very often works. On a passenger car, go back to R&D — promising without a test is what produces the failed visits."],
+  ]},
+  {h:["أسئلة بتتكرر","Questions that keep coming up"], b:[
+    ["«العربية مش في القوايم، يعني مستحيل؟» لأ. يعني مفيش ملف مخصوص ليها عند Xirgo. البروتوكول العام ممكن يشغّلها، خصوصًا لو مركبة تقيلة.",
+     "“It is not in the lists, so it is impossible?” No. It means Xirgo has no dedicated file for it. The generic protocol may still drive it, especially on a heavy vehicle."],
+    ["«الملف موجود، أقول للعميل مدعومة؟» مش لوحده. الملف في الكتالوج وعد، والتركيب الناجح هو الإثبات. الأخضر بس هو اللي يتقال للعميل من غير تحفّظ.",
+     "“The file exists, can I tell the customer it is supported?” Not on its own. A file in the catalogue is a promise; a successful install is the proof. Only green should be repeated to a customer without qualification."],
+    ["«ليه بيظهر ملفين لنفس الموديل؟» لأن Xirgo بتعمل ملف لكل جيل. لما تختار سنة، الملف المعمول للسنة دي بيبان لوحده والأقدم ينزل تحت.",
+     "“Why two files for the same model?” Because Xirgo builds one per generation. Pick a year and the file made for it stands on its own, with older ones below."],
+    ["«الحساس مكتوب جنبه ساكت، يعني عطلان؟» مش بالضرورة. يعني معرّف على الوحدة ومفيش منه قيمة. عربية واقفة عدادها ساكت بطبيعته. الساكت المريب هو اللي المفروض يتحرك ومش بيتحرك.",
+     "“A sensor says silent — is it broken?” Not necessarily. It means it is configured on the unit with no value arriving. A parked vehicle's odometer is silent by nature. The suspicious kind is the one that should be moving and is not."],
+    ["«الأرقام دي بتتحدث إمتى؟» كل ليلة الساعة ٤ فجرًا بتوقيت جدة. وأي جهاز بيتقرا من جديد كل يومين على الأكتر حتى لو ما اتغيرش.",
+     "“When do these numbers update?” Every night at 04:00 Jeddah time. Every device is re-read at least every two days even if nothing changed."],
+    ["«لقيت حاجة غلط، أعمل إيه؟» ابعتها لـ R&D بالنوع والموديل والسنة واللي الصفحة قالته. الأداة بتقرا من XDM ومن منصة أفاقي، فالغلط غالبًا بيرجع لواحدة منهم ولازم يتصلح هناك.",
+     "“I found something wrong, what now?” Send it to R&D with the make, model, year and what the page said. The tool reads from XDM and the Afaqy platform, so an error usually traces back to one of them and has to be fixed there."],
+  ]},
+  {h:["حدود الأداة","What it will not tell you"], b:[
       ["العيّنة ٦ أجهزة لكل ملف. لو الستة صادف إنهم واقفين، الملف هيبان كأنه مش بيبعت — والحكم ساعتها ظالم للملف.",
        "The sample is six devices per file. If those six happen to be parked, the file will look silent — and that verdict is unfair to it."],
       ["الأداة بتقول إيه اللي حصل، مش إيه اللي هيحصل. عربية ما اتركّبتش قبل كده ممكن تشتغل تمام، والتجربة الميدانية هي اللي بتحسم.",

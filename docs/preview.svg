@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <!-- The card a shared link unfolds into. Same two wires as the page:
+       ISO 11898 runs CAN-H yellow over CAN-L green, and anyone who has
+       opened a harness recognises the pair on sight. -->
+  <rect width="1200" height="630" fill="#101619"/>
+  <g fill="none" stroke-width="14" stroke-linecap="round" opacity="0.9">
+    <path d="M-40 300c90 0 90 120 180 120s90-120 180-120 90 120 180 120 90-120 180-120 90 120 180 120 90-120 180-120 90 120 180 120"
+          stroke="#E0A106"/>
+    <path d="M-40 420c90 0 90-120 180-120s90 120 180 120 90-120 180-120 90 120 180 120 90-120 180-120 90 120 180 120 90-120 180-120"
+          stroke="#12734A"/>
+  </g>
+  <rect x="0" y="0" width="1200" height="300" fill="#101619"/>
+  <text x="80" y="150" font-family="'IBM Plex Sans','Segoe UI',system-ui,sans-serif"
+        font-size="88" font-weight="700" fill="#E9ECE8" letter-spacing="-3">canval</text>
+  <text x="80" y="210" font-family="'IBM Plex Sans','Segoe UI',system-ui,sans-serif"
+        font-size="34" fill="#95A0A6">CAN support — is this vehicle supported?</text>
+  <text x="80" y="262" font-family="'IBM Plex Mono',ui-monospace,monospace"
+        font-size="24" fill="#6A7580">read from the catalogue and from devices in the field</text>
+</svg>

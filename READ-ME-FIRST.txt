@@ -1,22 +1,26 @@
-canval v1.3
+canval v1.5
 ===========
 
-One file, no sync needed. Unzip over D:\canval:
+Two files, no sync needed. Unzip over D:\canval:
 
     docs/index.html
+    docs/preview.svg
 
     cd D:\canval
     git pull --no-rebase
     git add -A
-    git commit -m "canval v1.3"
+    git commit -m "canval v1.5"
     git push
 
 What changed
 ------------
-Tapping one of the ten cards filled in the pickers and showed a result,
-but nothing marked which card had produced it and there was no way back
-except tapping the same card again -- a toggle nobody would guess at.
+The card highlight and the tap-to-close behaviour were written in v1.3
+but never reached the file: the edit script printed its success line
+before saving, so when a later edit failed the whole batch rolled back
+while the log still said it had worked. That is why a card would open
+with no green mark and no way to close it.
 
-Now the chosen card stays marked for as long as its answer is on screen,
-a Back button sits above the result, and picking a make by hand clears
-the card. Nothing else changed.
+Both are in now, and every piece has been read back out of the file to
+prove it. Tapping a card opens it, tapping the same card again closes it,
+tapping another swaps, and the Back button and Clear do the same thing
+through one code path instead of three.
