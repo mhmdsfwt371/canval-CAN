@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS file_live (
     answered  INTEGER,      -- devices the platform knew
     reporting INTEGER,      -- devices that returned at least one signal
     signals   TEXT,         -- JSON: {signal name: devices reporting it}
+    devices   TEXT,         -- JSON: the sampled devices, one entry each
     checked_at TEXT DEFAULT (datetime('now'))
 );
 """
@@ -122,6 +123,24 @@ class Pro:
         return [u for u in (data or []) if isinstance(u, dict)]
 
 
+def readings_of(view) -> list[dict]:
+    """Named sensors with the value the platform currently holds.
+
+    Named only: a bare key like sensor_12289 is a wire-level value with no
+    sensor configured against it, and nobody asked whether sensor_12289
+    works. The raw value is carried through rather than converted here --
+    the conversion lives in the payload and belongs to the adapter.
+    """
+    seen = {p.key: p for p in view.parameters if p.value not in (None, "")}
+    out = []
+    for s in view.specs:
+        p = seen.get(s.param) if s.param else None
+        if p is None or not s.name:
+            continue
+        out.append({"n": s.name, "v": p.value, "t": p.changed_at})
+    return sorted(out, key=lambda r: r["n"])
+
+
 def signals_of(view) -> list[str]:
     """Which named sensors this unit is actually carrying values for.
 
@@ -159,6 +178,9 @@ def main(argv=None) -> int:
 
     with connect(args.db) as conn:
         conn.executescript(SCHEMA)
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(file_live)")}
+        if "devices" not in cols:
+            conn.execute("ALTER TABLE file_live ADD COLUMN devices TEXT")
         by_file = pick_sample(conn, args.sample)
 
         wanted: list[str] = []
@@ -199,23 +221,36 @@ def main(argv=None) -> int:
             answered = [views[i] for i in imeis if i in views]
             tally: dict[str, int] = defaultdict(int)
             reporting = 0
+            devices = []
             for view in answered:
-                names = signals_of(view)
-                if names:
+                readings = readings_of(view)
+                if readings:
                     reporting += 1
-                for n in names:
-                    tally[n] += 1
+                for r in readings:
+                    tally[r["n"]] += 1
+                devices.append({
+                    "i": str(view.imei or ""),
+                    "u": view.name or "",
+                    "t": view.last_message or 0,
+                    "r": readings[:40],
+                })
+            # Newest first: the three at the top are the ones worth opening
+            # to check a file by hand.
+            devices.sort(key=lambda d: -(d["t"] or 0))
+
             conn.execute(
                 """INSERT INTO file_live
-                       (file_id, sampled, answered, reporting, signals, checked_at)
-                   VALUES (?,?,?,?,?, datetime('now'))
+                       (file_id, sampled, answered, reporting, signals,
+                        devices, checked_at)
+                   VALUES (?,?,?,?,?,?, datetime('now'))
                    ON CONFLICT(file_id) DO UPDATE SET
                        sampled=excluded.sampled, answered=excluded.answered,
                        reporting=excluded.reporting, signals=excluded.signals,
-                       checked_at=excluded.checked_at""",
+                       devices=excluded.devices, checked_at=excluded.checked_at""",
                 (file_id, len(imeis), len(answered), reporting,
                  json.dumps(dict(sorted(tally.items(), key=lambda kv: -kv[1])),
-                            ensure_ascii=False)))
+                            ensure_ascii=False),
+                 json.dumps(devices[:3], ensure_ascii=False)))
             rows += 1
 
         live = conn.execute(

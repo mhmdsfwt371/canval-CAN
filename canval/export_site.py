@@ -16,12 +16,16 @@ would have been.
 
 WHAT IS DELIBERATELY LEFT OUT
 -----------------------------
-IMEIs, SIM numbers and per-device rows never leave the database. The page
-needs counts and names to answer its question; publishing a fleet's
-device identifiers to a URL would be a different and much worse decision.
-Configuration names appear only inside the hint worklists, where the text
-is the evidence and stripping it would make the lead unusable -- and only
-as one sample per make.
+Counts and names carry most of the answer, but not all of it: checking a
+file by hand means opening a real device on the tracking platform and
+reading what it shows. So three identifiers per file -- the three that
+reported most recently -- are exported along with their current readings.
+
+That is a deliberate trade, made by the fleet's owner rather than by this
+script. Everything else stays behind: SIM numbers, the other twenty
+thousand devices, and any device not needed to verify a file. Whoever
+publishes this page should know its address is the only thing protecting
+those three numbers, and add sign-in when that stops being enough.
 
     python -m canval.export_site --out docs/data
 """
@@ -70,15 +74,22 @@ def export_vehicles(conn) -> list[dict]:
     live = {}
     if conn.execute("SELECT name FROM sqlite_master "
                     "WHERE name='file_live'").fetchone():
-        for r in conn.execute(
-                """SELECT file_id, sampled, answered, reporting, signals
-                     FROM file_live"""):
+        cols = {c[1] for c in conn.execute("PRAGMA table_info(file_live)")}
+        pick = "file_id, sampled, answered, reporting, signals" + (
+            ", devices" if "devices" in cols else "")
+        for r in conn.execute(f"SELECT {pick} FROM file_live"):
             try:
                 names = list(json.loads(r["signals"] or "{}").keys())
             except ValueError:
                 names = []
-            live[r["file_id"]] = {"n": r["sampled"], "k": r["answered"],
-                                  "r": r["reporting"], "s": names[:24]}
+            entry = {"n": r["sampled"], "k": r["answered"],
+                     "r": r["reporting"], "s": names[:24]}
+            if "devices" in cols and r["devices"]:
+                try:
+                    entry["d"] = json.loads(r["devices"])
+                except ValueError:
+                    pass
+            live[r["file_id"]] = entry
 
     fitted, active, configs = {}, {}, {}
     for r in conn.execute(
