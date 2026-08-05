@@ -66,8 +66,11 @@ jobs:
 
       - name: Refresh the catalogue and sweep the devices
         run: |
-          python -m canval.cli sync \
+          python -m canval.cli catalogue
+          python -m canval.cli index \
             --hardware 3 4 12 15 16 89 98 \
+            --verify 1 \
+            --refresh-after 2 \
             --active-days 0
 
       - name: Read the configuration names for leads
