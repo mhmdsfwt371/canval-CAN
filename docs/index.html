@@ -8,148 +8,142 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-/* Colours come off a CAN harness: ISO 11898 runs a twisted pair of
-   yellow (CAN-H) and green (CAN-L). Those two wires are the subject of
-   this whole tool, so they are the only saturated colours on the page. */
+/* Colours off a CAN harness: ISO 11898 runs a twisted pair of yellow
+   (CAN-H) and green (CAN-L). Those two wires are what this whole tool is
+   about, so they are the only saturated colours on the page. */
 :root{
   --ink:#101619; --paper:#E9ECE8; --panel:#fff; --line:#CFD5CE;
   --muted:#6A7580; --canh:#E0A106; --canl:#12734A; --alert:#A33227;
-  --shadow:0 1px 0 rgba(16,22,25,.04), 0 8px 24px -18px rgba(16,22,25,.5);
+  --soft:#F5F6F4;
   --mono:"IBM Plex Mono",ui-monospace,monospace;
   --sans:"IBM Plex Sans Arabic",system-ui,sans-serif;
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
-body{
-  background:var(--paper); color:var(--ink); font-family:var(--sans);
-  font-size:16px; line-height:1.6; -webkit-font-smoothing:antialiased;
-}
-.wrap{max-width:920px;margin:0 auto;padding:0 20px}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);
+  font-size:15.5px;line-height:1.6;-webkit-font-smoothing:antialiased}
+.wrap{max-width:980px;margin:0 auto;padding:0 20px}
+a{color:var(--canl)}
 
-/* ---------- instrument bar ---------- */
+/* ---------------- instrument bar ---------------- */
 .bar{border-bottom:1px solid var(--line);background:var(--panel)}
 .bar .wrap{display:flex;align-items:baseline;gap:18px;flex-wrap:wrap;
-  padding-top:14px;padding-bottom:14px}
+  padding-top:13px;padding-bottom:13px}
 .brand{font-weight:700;letter-spacing:-.02em;font-size:19px}
-.brand span{color:var(--muted);font-weight:500}
+.brand span{color:var(--muted);font-weight:500;font-size:15px}
 .gauges{margin-inline-start:auto;display:flex;gap:20px;flex-wrap:wrap}
-.gauge{font-family:var(--mono);font-size:12.5px;color:var(--muted);
-  white-space:nowrap}
+.gauge{font-family:var(--mono);font-size:12.5px;color:var(--muted);white-space:nowrap}
 .gauge b{color:var(--ink);font-weight:600;font-size:14px}
 
-/* ---------- search ---------- */
-.ask{padding:44px 0 26px}
-.ask h1{margin:0 0 6px;font-size:clamp(26px,4.4vw,38px);font-weight:700;
-  letter-spacing:-.03em;line-height:1.22}
-.ask p{margin:0 0 22px;color:var(--muted);max-width:52ch}
-.field{position:relative;display:flex;gap:10px;flex-wrap:wrap}
-#q{
-  flex:1 1 320px;font-family:var(--sans);font-size:19px;font-weight:500;
-  padding:15px 18px;border:1.5px solid var(--ink);border-radius:2px;
-  background:var(--panel);color:var(--ink);
+/* ---------------- the three steps ---------------- */
+.ask{padding:34px 0 8px}
+.ask h1{margin:0 0 18px;font-size:clamp(24px,4vw,34px);font-weight:700;
+  letter-spacing:-.03em;line-height:1.25}
+.steps{display:grid;grid-template-columns:1.2fr 1.4fr .8fr auto;gap:10px}
+@media(max-width:700px){.steps{grid-template-columns:1fr 1fr}.steps .clear{grid-column:2}}
+.step label{display:block;font-family:var(--mono);font-size:11.5px;
+  color:var(--muted);margin-bottom:5px;letter-spacing:.04em}
+select{
+  width:100%;font-family:var(--sans);font-size:16px;font-weight:500;
+  padding:12px 12px;border:1.5px solid var(--ink);border-radius:2px;
+  background:var(--panel);color:var(--ink);cursor:pointer;
 }
-#q::placeholder{color:#9AA4AC;font-weight:400}
-#q:focus{outline:3px solid var(--canh);outline-offset:2px}
-#year{
-  width:118px;font-family:var(--mono);font-size:15px;padding:15px 12px;
-  border:1.5px solid var(--line);border-radius:2px;background:var(--panel);
-  color:var(--ink);
+select:disabled{border-color:var(--line);color:var(--muted);cursor:default;
+  background:var(--soft)}
+select:focus{outline:3px solid var(--canh);outline-offset:2px}
+.clear{align-self:end}
+.clear button{font-family:var(--sans);font-size:14px;padding:12px 16px;
+  border:1.5px solid var(--line);background:var(--panel);border-radius:2px;
+  cursor:pointer;color:var(--muted)}
+.clear button:hover{border-color:var(--ink);color:var(--ink)}
+.miss-line{margin:14px 0 0;font-size:13.5px;color:var(--muted)}
+.miss-line input{
+  font-family:var(--sans);font-size:14px;padding:7px 10px;margin-inline-start:8px;
+  border:1px solid var(--line);border-radius:2px;background:var(--panel);
+  width:min(320px,60vw);
 }
-#year:focus{outline:3px solid var(--canh);outline-offset:2px}
-.chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
-.chip{
-  font-size:13.5px;padding:5px 11px;border:1px solid var(--line);
-  border-radius:999px;background:var(--panel);cursor:pointer;color:var(--muted);
-  font-family:var(--sans);
-}
-.chip:hover{border-color:var(--ink);color:var(--ink)}
-.chip:focus-visible{outline:2px solid var(--canh);outline-offset:2px}
+.miss-line input:focus{outline:3px solid var(--canh);outline-offset:1px}
 
-/* ---------- results ---------- */
-.tally{font-family:var(--mono);font-size:13px;color:var(--muted);
-  padding:6px 0 14px;border-top:1px solid var(--line)}
-.card{
-  background:var(--panel);border:1px solid var(--line);border-radius:3px;
-  margin-bottom:14px;box-shadow:var(--shadow);overflow:hidden;
-}
-.head{padding:16px 18px 14px;display:flex;gap:14px;align-items:flex-start;
+/* ---------------- verdict ---------------- */
+.verdict{margin:26px 0 18px;background:var(--panel);border:1px solid var(--line);
+  border-inline-start:4px solid var(--muted);border-radius:3px;padding:16px 18px}
+.verdict.ok{border-inline-start-color:var(--canl)}
+.verdict.warn{border-inline-start-color:var(--canh)}
+.verdict.bad{border-inline-start-color:var(--alert)}
+.verdict h2{margin:0;font-size:19px;font-weight:700;letter-spacing:-.02em}
+.verdict.ok h2{color:var(--canl)}
+.verdict.bad h2{color:var(--alert)}
+.verdict .nums{font-family:var(--mono);font-size:13px;color:var(--muted);
+  margin-top:7px;display:flex;gap:18px;flex-wrap:wrap}
+.verdict .nums b{color:var(--ink);font-size:16px;font-weight:600}
+.verdict p{margin:8px 0 0;font-size:14px;color:var(--muted)}
+
+/* ---------------- the list ---------------- */
+h3.sec{font-size:14px;font-weight:600;margin:24px 0 8px;letter-spacing:.01em;
+  color:var(--muted)}
+h3.sec b{color:var(--ink)}
+.list{background:var(--panel);border:1px solid var(--line);border-radius:3px;
+  overflow:hidden}
+.li{display:grid;grid-template-columns:44px 1fr auto auto auto auto;
+  gap:0 16px;align-items:center;padding:11px 16px;
+  border-bottom:1px solid var(--line)}
+.li:last-child{border-bottom:0}
+.li:hover{background:var(--soft)}
+.li .pair{justify-self:center}
+.li .nm{min-width:0}
+.li .nm .t{font-weight:600;font-size:15px;letter-spacing:-.01em;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.li .nm .d{font-family:var(--mono);font-size:11.5px;color:var(--muted);
+  margin-top:1px}
+.num{font-family:var(--mono);font-size:12px;color:var(--muted);
+  text-align:center;min-width:58px}
+.num b{display:block;font-size:15.5px;color:var(--ink);font-weight:600;
+  line-height:1.3}
+.num.zero b{color:var(--muted);font-weight:400}
+.li .sx{background:none;border:1px solid var(--line);border-radius:2px;
+  font-family:var(--sans);font-size:12.5px;color:var(--muted);cursor:pointer;
+  padding:4px 10px;white-space:nowrap}
+.li .sx:hover{border-color:var(--ink);color:var(--ink)}
+.li .sx:focus-visible,select:focus-visible{outline:2px solid var(--canh)}
+.sensors{grid-column:1/-1;padding:10px 2px 2px;display:flex;gap:6px;
   flex-wrap:wrap}
-.head h2{margin:0;font-size:19px;font-weight:600;letter-spacing:-.02em}
-.head .sub{font-family:var(--mono);font-size:12.5px;color:var(--muted);
-  margin-top:3px}
-.verdict{margin-inline-start:auto;text-align:end;font-size:13.5px;
-  font-weight:600;white-space:nowrap}
-.verdict.on{color:var(--canl)}
-.verdict.off{color:var(--muted)}
-.verdict .n{font-family:var(--mono);font-size:20px;display:block;
-  line-height:1.15}
-
-.bus{display:flex;gap:14px;align-items:flex-start;padding:13px 18px;
-  border-top:1px solid var(--line)}
-.bus:hover{background:#F7F8F6}
-.pair{flex:none;margin-top:3px}
-.meta{flex:1 1 auto;min-width:0}
-.tags{font-family:var(--mono);font-size:12.5px;color:var(--muted);
-  display:flex;gap:14px;flex-wrap:wrap}
-.tags b{color:var(--ink);font-weight:600}
-.sensors{margin-top:9px;display:flex;gap:6px;flex-wrap:wrap}
 .s{font-size:12.5px;padding:3px 9px;border-radius:2px;background:#EEF3EF;
   color:#20563C;border:1px solid #D7E4DA}
 .s.no{background:#F7EDEC;color:#8A3229;border-color:#E9D2CF}
-.count{flex:none;font-family:var(--mono);font-size:13px;color:var(--muted);
-  text-align:end;min-width:76px}
-.count b{display:block;font-size:17px;color:var(--ink);font-weight:600}
-.more{background:none;border:0;padding:0;margin-top:8px;cursor:pointer;
-  font-family:var(--sans);font-size:13px;color:var(--muted);
-  text-decoration:underline;text-underline-offset:3px}
-.more:hover{color:var(--ink)}
-.guide{font-size:13px;margin-top:8px;display:inline-block;color:var(--canl)}
-
-/* ---------- empty / miss ---------- */
-.note{background:var(--panel);border:1px solid var(--line);border-inline-start:3px solid var(--canh);
-  border-radius:3px;padding:18px;margin-bottom:16px}
-.note h3{margin:0 0 8px;font-size:17px;font-weight:600}
-.note p{margin:0 0 8px;color:var(--muted);font-size:14.5px}
-.note ul{margin:8px 0 0;padding-inline-start:20px;color:var(--muted);
-  font-size:14.5px}
-.note li{margin-bottom:4px}
-
-/* ---------- panels ---------- */
-.tabs{display:flex;gap:4px;margin:34px 0 0;border-bottom:1px solid var(--line)}
-.tab{
-  background:none;border:0;border-bottom:2px solid transparent;
-  padding:9px 14px;font-family:var(--sans);font-size:15px;font-weight:500;
-  color:var(--muted);cursor:pointer;margin-bottom:-1px;
+@media(max-width:640px){
+  .li{grid-template-columns:36px 1fr auto auto}
+  .li .num:nth-child(5),.li .num:nth-child(6){display:none}
 }
+
+.cfg .nm .t{font-family:var(--mono);font-weight:500;font-size:13px;
+  white-space:normal;word-break:break-all}
+.empty{padding:16px;color:var(--muted);font-size:14px}
+.note{font-size:13px;color:var(--muted);margin:10px 2px 0;max-width:70ch}
+
+/* ---------------- tabs ---------------- */
+.tabs{display:flex;gap:4px;margin:40px 0 0;border-bottom:1px solid var(--line)}
+.tab{background:none;border:0;border-bottom:2px solid transparent;
+  padding:9px 14px;font-family:var(--sans);font-size:15px;font-weight:500;
+  color:var(--muted);cursor:pointer;margin-bottom:-1px}
 .tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--ink);
   font-weight:600}
-.tab:focus-visible{outline:2px solid var(--canh);outline-offset:-2px}
-.panel{padding:22px 0 60px}
+.panel{padding:20px 0 50px}
 .panel[hidden]{display:none}
-.rows{border:1px solid var(--line);border-radius:3px;background:var(--panel);
-  overflow:hidden}
-.row{display:flex;gap:14px;align-items:baseline;padding:11px 16px;
-  border-bottom:1px solid var(--line);font-size:14.5px}
+.row{display:flex;gap:14px;align-items:baseline;padding:10px 16px;
+  border-bottom:1px solid var(--line);font-size:14px}
 .row:last-child{border-bottom:0}
 .row .n{font-family:var(--mono);font-weight:600;min-width:64px}
-.row .why{color:var(--muted);font-size:13px;margin-inline-start:auto;
+.row .why{color:var(--muted);font-size:12.5px;margin-inline-start:auto;
   text-align:end;font-family:var(--mono)}
-.lead{font-size:14px;color:var(--muted);margin:0 0 12px;max-width:62ch}
-h3.sec{font-size:15px;font-weight:600;margin:26px 0 10px;letter-spacing:-.01em}
-.ev{font-family:var(--mono);font-size:12px;color:var(--muted);
+.lead{font-size:14px;color:var(--muted);margin:0 0 12px;max-width:64ch}
+.ev{font-family:var(--mono);font-size:11.5px;color:var(--muted);
   display:block;margin-top:2px;word-break:break-all}
-
-footer{border-top:1px solid var(--line);padding:18px 0 40px;
-  font-size:13px;color:var(--muted)}
+footer{border-top:1px solid var(--line);padding:16px 0 40px;font-size:13px;
+  color:var(--muted)}
 footer code{font-family:var(--mono);font-size:12px}
-
-@media (prefers-reduced-motion:no-preference){
-  .card{animation:rise .22s ease-out both}
-  @keyframes rise{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
-}
-@media (max-width:560px){
-  .verdict{margin-inline-start:0;text-align:start}
-  .count{text-align:start;min-width:0}
+@media(prefers-reduced-motion:no-preference){
+  .verdict,.list{animation:rise .2s ease-out both}
+  @keyframes rise{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
 }
 </style>
 </head>
@@ -162,360 +156,383 @@ footer code{font-family:var(--mono);font-size:12px}
 
 <main class="wrap">
 
-  <section class="ask">
-    <h1>هل العربية دي مدعومة؟</h1>
-    <p>اكتب النوع والموديل. الإجابة بتيجي من كتالوج ملفات الكان ومن الأجهزة
-       المركّبة فعلًا في الأسطول.</p>
-    <div class="field">
-      <input id="q" type="search" autocomplete="off" spellcheck="false"
-             placeholder="مرسيدس أكتروس، شاكمان، كيا بيجاس…" aria-label="نوع العربية">
-      <input id="year" type="number" inputmode="numeric" min="1990" max="2030"
-             placeholder="السنة" aria-label="سنة الصنع">
-    </div>
-    <div class="chips" id="chips"></div>
-  </section>
-
-  <div id="out"></div>
-
-  <div class="tabs" role="tablist">
-    <button class="tab" role="tab" id="t-fleet" aria-controls="p-fleet"
-            aria-selected="true">الأسطول</button>
-    <button class="tab" role="tab" id="t-leads" aria-controls="p-leads"
-            aria-selected="false">فرص شغل</button>
-    <button class="tab" role="tab" id="t-new" aria-controls="p-new"
-            aria-selected="false">وصل جديد</button>
+<section class="ask">
+  <h1>هل العربية دي مدعومة؟</h1>
+  <div class="steps">
+    <div class="step"><label for="mk">النوع</label>
+      <select id="mk"><option value="">— اختار —</option></select></div>
+    <div class="step"><label for="md">الموديل</label>
+      <select id="md" disabled><option value="">—</option></select></div>
+    <div class="step"><label for="yr">السنة</label>
+      <select id="yr" disabled><option value="">—</option></select></div>
+    <div class="clear"><button id="reset" type="button">مسح</button></div>
   </div>
-  <section class="panel" id="p-fleet" role="tabpanel" aria-labelledby="t-fleet"></section>
-  <section class="panel" id="p-leads" role="tabpanel" aria-labelledby="t-leads" hidden></section>
-  <section class="panel" id="p-new" role="tabpanel" aria-labelledby="t-new" hidden></section>
+  <div class="miss-line">مش لاقي العربية في القوايم؟ يبقى مالهاش ملف —
+    <label>اكتب اسمها هنا وشوف العام:
+    <input id="free" type="search" autocomplete="off" spellcheck="false"
+           placeholder="مثلًا: CAMC"></label>
+  </div>
+</section>
+
+<div id="out"></div>
+
+<div class="tabs" role="tablist">
+  <button class="tab" role="tab" id="t-fleet" aria-controls="p-fleet" aria-selected="true">الأسطول</button>
+  <button class="tab" role="tab" id="t-leads" aria-controls="p-leads" aria-selected="false">فرص شغل</button>
+  <button class="tab" role="tab" id="t-new" aria-controls="p-new" aria-selected="false">وصل جديد</button>
+</div>
+<section class="panel" id="p-fleet" role="tabpanel"></section>
+<section class="panel" id="p-leads" role="tabpanel" hidden></section>
+<section class="panel" id="p-new" role="tabpanel" hidden></section>
 
 </main>
 
 <footer class="wrap">
   <div id="stamp"></div>
-  <div>القراءات الحية من منصة أفاقي مش في النسخة دي — لسه بتتعمل من سطر الأوامر
-      بـ <code>canval check</code>.</div>
+  <div>التأكيد النهائي من حساسات البرو لسه بيتعمل يدوي — عرض آخر الأجهزة
+    المحدّثة جاي مع تسجيل الدخول.</div>
 </footer>
 
 <script>
 "use strict";
+const state = {v: [], cfg: [], fleet: null, meta: null};
+const $ = id => document.getElementById(id);
+const esc = s => (s ?? "").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;")
+  .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const THIS_YEAR = new Date().getFullYear();
 
-/* ------------------------------------------------------------------ data */
-const state = {vehicles: [], fleet: null, meta: null};
-
-async function load(){
-  try{
-    const [v, f, m] = await Promise.all([
-      fetch("data/vehicles.json").then(r => r.json()),
-      fetch("data/fleet.json").then(r => r.json()),
-      fetch("data/meta.json").then(r => r.json()),
-    ]);
-    state.vehicles = v; state.fleet = f; state.meta = m;
-    prepare();
-    gauges(); fleetPanel(); leadsPanel(); newPanel(); stamp();
-    render("");
-  }catch(err){
-    document.getElementById("out").innerHTML =
-      `<div class="note"><h3>البيانات مش موجودة</h3>
-       <p>الصفحة بتقرا ملفات من مجلد <code>data/</code> والمجلد فاضي أو لسه
-          ما اترفعش. شغّل مهمة <b>canval nightly</b> من تبويب Actions، وبعد ما
-          تخلص حدّث الصفحة.</p></div>`;
-  }
-}
-
-/* --------------------------------------------------------------- folding */
-/* Arabic spellings folded to the latin the catalogue uses. Short and
-   checkable rather than clever: every entry is a make people actually
-   type when they ask about a truck. */
-const ALIAS = {
-  "شاكمان":"shacman","شكمان":"shacman","مرسيدس":"mercedes","مرسيديس":"mercedes",
-  "اكتروس":"actros","أكتروس":"actros","اتيجو":"atego","فولفو":"volvo",
-  "سكانيا":"scania","اسكانيا":"scania","مان":"man","داف":"daf",
-  "ايفيكو":"iveco","إيفيكو":"iveco","هينو":"hino","فوسو":"fuso",
-  "كاماز":"kamaz","سينوتراك":"sinotruk","هوو":"howo","دونغفينغ":"dongfeng",
-  "فوتون":"foton","فاو":"faw","جاك":"jac","يوتونغ":"yutong","تاتا":"tata",
-  "تويوتا":"toyota","هايس":"hiace","هايلكس":"hilux","نيسان":"nissan",
-  "ايسوزو":"isuzu","إيسوزو":"isuzu","هيونداي":"hyundai","هونداي":"hyundai",
-  "كيا":"kia","فورد":"ford","شيفروليه":"chevrolet","بيجو":"peugeot",
-  "رينو":"renault","فيات":"fiat","ام جي":"mg","دايو":"daewoo",
-  "ميتسوبيشي":"mitsubishi","اكسنت":"accent","النترا":"elantra",
-  "بيجاس":"pegas","سيراتو":"cerato","سبورتاج":"sportage","كورولا":"corolla",
-  "فورتشنر":"fortuner","برادو":"prado","سني":"sunny",
-};
-const HEAVY = ["scania","man","daf","iveco","actros","atego","arocs","volvo",
-  "shacman","sinotruk","howo","faw","dongfeng","foton","jac","hino","fuso",
-  "isuzu","kamaz","mack","freightliner","tata","truck","lorry","bus",
-  "شاحنة","تريلا","اتوبيس","قلاب","صهريج","مقطورة"];
-
+/* ------------------------------------------------------------- folding */
+const ALIAS = {"شاكمان":"shacman","شكمان":"shacman","مرسيدس":"mercedes",
+"اكتروس":"actros","فولفو":"volvo","سكانيا":"scania","مان":"man","داف":"daf",
+"ايفيكو":"iveco","هينو":"hino","فوسو":"fuso","كاماز":"kamaz",
+"سينوتراك":"sinotruk","هوو":"howo","دونغفينغ":"dongfeng","فوتون":"foton",
+"فاو":"faw","جاك":"jac","يوتونغ":"yutong","تويوتا":"toyota","هايس":"hiace",
+"هايلكس":"hilux","نيسان":"nissan","ايسوزو":"isuzu","هيونداي":"hyundai",
+"هونداي":"hyundai","كيا":"kia","فورد":"ford","شيفروليه":"chevrolet",
+"بيجو":"peugeot","رينو":"renault","فيات":"fiat","دايو":"daewoo",
+"ميتسوبيشي":"mitsubishi","اكسنت":"accent","النترا":"elantra","بيجاس":"pegas",
+"سيراتو":"cerato","كورولا":"corolla","برادو":"prado"};
 function fold(s){
-  return (s || "").toString().toLowerCase()
-    .replace(/[\u064B-\u0652\u0670\u0640]/g, "")
-    .replace(/[أإآٱ]/g, "ا").replace(/ة/g, "ه").replace(/[ىئ]/g, "ي")
-    .replace(/ؤ/g, "و").replace(/ء/g, "")
-    .replace(/[^\w\u0600-\u06FF]+/g, " ").trim();
+  return (s||"").toString().toLowerCase()
+    .replace(/[\u064B-\u0652\u0670\u0640]/g,"")
+    .replace(/[أإآٱ]/g,"ا").replace(/ة/g,"ه").replace(/[ىئ]/g,"ي")
+    .replace(/ؤ/g,"و").replace(/ء/g,"")
+    .replace(/[^\w\u0600-\u06FF]+/g," ").trim();
 }
 function terms(s){
-  let t = " " + fold(s) + " ";
-  for(const [ar, lat] of Object.entries(ALIAS)) t = t.split(ar).join(" " + lat + " ");
+  let t = " "+fold(s)+" ";
+  for(const [a,l] of Object.entries(ALIAS)) t = t.split(a).join(" "+l+" ");
   return t.split(/\s+/).filter(w => w.length > 1);
 }
 
-function prepare(){
-  for(const v of state.vehicles){
-    v._h = fold([v.n, v.mk, v.md, v.va].filter(Boolean).join(" "));
+/* --------------------------------------------------------------- load */
+async function load(){
+  try{
+    const [v,cfg,fleet,meta] = await Promise.all(
+      ["vehicles","configs","fleet","meta"]
+        .map(n => fetch("data/"+n+".json").then(r => {
+          if(!r.ok) throw new Error(n); return r.json(); })));
+    Object.assign(state,{v,cfg,fleet,meta});
+    for(const x of state.cfg) x._h = fold(x.nm);
+    buildMakes(); gauges(); fleetPanel(); leadsPanel(); newPanel(); stamp();
+  }catch(e){
+    $("out").innerHTML = `<div class="verdict bad"><h2>البيانات مش كاملة</h2>
+      <p>ملف <code>${esc(e.message)}.json</code> مش موجود. شغّل مهمة
+      canval nightly مرة واحدة بعد رفع النسخة دي، وبعدين حدّث الصفحة.</p></div>`;
   }
 }
 
-/* --------------------------------------------------------------- search */
-function search(query, year){
-  let words = terms(query);
-  /* People type "شاكمان 2021" as one thought. A four-digit number that
-     could be a year is treated as one -- but only when something else is
-     there to search on, so "shacman 7300" still looks for the model. */
-  const asYear = words.find(w => /^\d{4}$/.test(w) && +w >= 1990 && +w <= 2030);
-  if(asYear && words.length > 1){
-    words = words.filter(w => w !== asYear);
-    year = year || +asYear;
+/* ------------------------------------------------------- the cascade */
+function buildMakes(){
+  const makes = new Map();
+  for(const v of state.v){
+    if(v.g) continue;                       // the generic protocols are a
+    const mk = v.mk || "";                  // path of their own, not a make
+    if(!mk) continue;
+    makes.set(mk, (makes.get(mk)||0)+1);
   }
-  if(!words.length) return [];
-  let hits = state.vehicles.filter(v => words.every(w => v._h.includes(w)));
-  if(!hits.length){
-    const longest = words.slice().sort((a, b) => b.length - a.length)[0];
-    hits = state.vehicles.filter(v => v._h.includes(longest));
+  const sel = $("mk");
+  [...makes.keys()].sort().forEach(mk => {
+    const o = document.createElement("option");
+    o.value = mk; o.textContent = mk;
+    sel.appendChild(o);
+  });
+}
+function buildModels(mk){
+  const md = $("md");
+  md.innerHTML = '<option value="">— اختار —</option>';
+  const models = new Map();
+  for(const v of state.v){
+    if(v.g || v.mk !== mk) continue;
+    const key = v.md || v.n;
+    models.set(key, (models.get(key)||0)+1);
   }
-  if(year){
-    hits = hits.filter(v => !v.y0 || (year >= v.y0 && (!v.y1 || year <= v.y1)));
+  [...models.keys()].sort().forEach(m => {
+    const o = document.createElement("option");
+    o.value = m; o.textContent = m;
+    md.appendChild(o);
+  });
+  md.disabled = false;
+}
+function filesFor(mk, md){
+  return state.v.filter(v => !v.g && v.mk === mk && (v.md || v.n) === md);
+}
+function buildYears(files){
+  const yr = $("yr");
+  yr.innerHTML = '<option value="">كل السنوات</option>';
+  const years = new Set();
+  let open = false;
+  for(const f of files){
+    if(!f.y0){ open = true; continue; }
+    const to = f.y1 || THIS_YEAR;
+    for(let y = f.y0; y <= to; y++) years.add(y);
   }
-  const groups = new Map();
-  for(const v of hits){
-    const key = v.n || "—";
-    if(!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(v);
-  }
-  return [...groups.entries()]
-    .map(([name, files]) => ({
-      name, files: files.sort((a, b) => (b.f - a.f) || ((a.b || 9) - (b.b || 9))),
-      fitted: files.reduce((n, f) => n + f.f, 0),
-    }))
-    .sort((a, b) => b.fitted - a.fitted || a.name.localeCompare(b.name));
+  [...years].sort((a,b) => b-a).forEach(y => {
+    const o = document.createElement("option");
+    o.value = y; o.textContent = y;
+    yr.appendChild(o);
+  });
+  yr.disabled = false;
+  return {years, open};
+}
+function coverYear(f, y){
+  if(!y) return true;
+  if(!f.y0) return true;                    // no range printed on the file
+  return y >= f.y0 && y <= (f.y1 || THIS_YEAR);
 }
 
-/* --------------------------------------------------------------- drawing */
-/* The signature mark: the twisted pair itself. CAN-H yellow over CAN-L
-   green, the two wires every one of these files is read from. CAN2 is
-   drawn dashed so the buses are told apart without a legend. */
-function pair(bus){
+/* --------------------------------------------------------- rendering */
+function pairSvg(bus){
   const dash = bus === 2 ? 'stroke-dasharray="4 3"' : "";
-  return `<svg class="pair" width="34" height="14" viewBox="0 0 34 14"
+  return `<svg class="pair" width="32" height="13" viewBox="0 0 34 14"
     aria-hidden="true" fill="none" stroke-width="2.2" stroke-linecap="round">
-    <path d="M1 4c4 0 4 6 8 6s4-6 8-6 4 6 8 6 4-6 8-6"
-          stroke="var(--canh)" ${dash}/>
-    <path d="M1 10c4 0 4-6 8-6s4 6 8 6 4-6 8-6 4 6 8 6"
-          stroke="var(--canl)" ${dash}/>
+    <path d="M1 4c4 0 4 6 8 6s4-6 8-6 4 6 8 6 4-6 8-6" stroke="var(--canh)" ${dash}/>
+    <path d="M1 10c4 0 4-6 8-6s4 6 8 6 4-6 8-6 4 6 8 6" stroke="var(--canl)" ${dash}/>
   </svg>`;
 }
+const num = (n, label, dim) =>
+  `<div class="num ${dim && !n ? "zero" : ""}"><b>${n ?? 0}</b>${label}</div>`;
 
-const esc = s => (s ?? "").toString()
-  .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-  .replace(/"/g, "&quot;");
-
-function years(v){
-  if(!v.y0) return "كل السنوات";
-  return v.y1 ? `${v.y0}–${v.y1}` : `${v.y0} وما بعدها`;
+function fileRow(f){
+  const bits = [
+    f.b ? "CAN"+f.b : "CAN?",
+    f.y0 ? (f.y1 ? `${f.y0}–${f.y1}` : `${f.y0}+`) : "كل السنوات",
+    f.kb ? f.kb+"kbps" : null,
+    f.p ? "OBD "+f.p : null,
+    f.r > 1 ? "rev "+f.r : null,
+  ].filter(Boolean).join(" · ");
+  const sN = (f.s||[]).length;
+  return `<div class="li" data-id="${f.i}">
+    ${pairSvg(f.b)}
+    <div class="nm"><div class="t">${esc(f.n)}</div>
+      <div class="d">${esc(bits)}</div></div>
+    ${num(f.f, "جهاز", true)}
+    ${num(f.a, "نشط آخر ٣٠ يوم", true)}
+    ${num(f.c, "ملف إعداد", true)}
+    <button class="sx" data-sx="${f.i}">${sN} إشارة</button>
+  </div>`;
 }
-
-function busRow(v){
-  const chips = (v.s || []).slice(0, 8).map(s => `<span class="s">${esc(s)}</span>`).join("");
-  const rest = (v.s || []).length - 8;
-  const bad = (v.x || []).map(s => `<span class="s no">${esc(s)}</span>`).join("");
-  return `<div class="bus">
-    ${pair(v.b)}
-    <div class="meta">
-      <div class="tags">
-        <b>CAN${v.b || "?"}</b>
-        <span>${esc(years(v))}</span>
-        ${v.kb ? `<span>${v.kb} kbps</span>` : ""}
-        ${v.p ? `<span>OBD ${esc(v.p)}</span>` : ""}
-        ${v.r > 1 ? `<span>مراجعة ${v.r}</span>` : ""}
-        ${v.v ? `<span>VMID ${v.v}</span>` : ""}
-      </div>
-      ${(v.s || v.x) ? `<div class="sensors">${chips}${bad}</div>` : ""}
-      ${rest > 0 ? `<button class="more" data-all="${v.i}">و${rest} إشارة كمان</button>` : ""}
-      ${v.u ? `<a class="guide" href="${esc(v.u)}" target="_blank" rel="noopener">دليل التركيب ↗</a>` : ""}
-    </div>
-    <div class="count">${v.f ? `<b>${v.f}</b>جهاز` : "<span>مش متركب</span>"}</div>
+function cfgRow(c){
+  return `<div class="li cfg">
+    <div></div>
+    <div class="nm"><div class="t">${esc(c.nm)}</div>
+      <div class="d">على ${esc(c.fl)}</div></div>
+    ${num(c.n, "جهاز", true)}
+    ${num(c.a, "نشط آخر ٣٠ يوم", true)}
+    <div></div><div></div>
   </div>`;
 }
 
-function card(g){
-  const first = g.files[0];
-  const on = g.fitted > 0;
-  return `<article class="card">
-    <div class="head">
-      <div>
-        <h2>${esc(g.name)}</h2>
-        <div class="sub">${esc([first.mk, first.md].filter(Boolean).join(" · "))}
-          ${g.files.length > 1 ? ` · ${g.files.length} ملف` : ""}</div>
-      </div>
-      <div class="verdict ${on ? "on" : "off"}">
-        ${on ? `<span class="n">${g.fitted}</span>جهاز شغّال عليها`
-             : "في الكتالوج، لسه متركبتش"}
-      </div>
-    </div>
-    ${g.files.map(busRow).join("")}
-  </article>`;
+function verdict(files, year){
+  const inYear = files.filter(f => coverYear(f, year));
+  const fitted = inYear.reduce((s,f) => s+f.f, 0);
+  const active = inYear.reduce((s,f) => s+(f.a||0), 0);
+  const cfgs   = inYear.reduce((s,f) => s+(f.c||0), 0);
+
+  if(year && !inYear.length){
+    const ranges = [...new Set(files.map(f =>
+      f.y0 ? (f.y1 ? `${f.y0}–${f.y1}` : `${f.y0}+`) : "كل السنوات"))].join("، ");
+    return {cls:"bad", h:`سنة ${year} خارج تغطية الملفات الموجودة`,
+      nums:null, p:`الملفات بتغطي: ${ranges}. جرّب سنة جواهم أو شوف العام تحت.`,
+      inYear: files};
+  }
+  if(fitted && active)
+    return {cls:"ok", h:"مدعومة ومثبتة ميدانيًا",
+      nums:[[fitted,"جهاز مركّب"],[active,"نشط آخر ٣٠ يوم"],[cfgs,"ملف إعداد"]],
+      p:null, inYear};
+  if(fitted)
+    return {cls:"warn", h:"مركّبة، لكن من غير نشاط آخر ٣٠ يوم",
+      nums:[[fitted,"جهاز مركّب"],[cfgs,"ملف إعداد"]],
+      p:"الملف مسند فعلًا، لكن الأجهزة دي ساكتة من شهر. تعتبر غير مثبتة لحد ما جهاز منهم يتشاف على البرو.", inYear};
+  return {cls:"bad", h:"الملف موجود في الكتالوج، لكن مش مركّب على أي جهاز",
+    nums:null,
+    p:"بحسب تعريفنا دي غير مدعومة فعليًا لحد أول تركيب ناجح. الملف جاهز للإسناد من المكتب.", inYear};
 }
 
-function miss(query){
+function renderPick(){
+  const mk = $("mk").value, md = $("md").value,
+        yr = parseInt($("yr").value, 10) || null;
+  if(!mk || !md){ $("out").innerHTML = ""; return; }
+  const files = filesFor(mk, md);
+  const v = verdict(files, yr);
+
+  let html = `<div class="verdict ${v.cls}"><h2>${esc(v.h)}</h2>`;
+  if(v.nums) html += `<div class="nums">${v.nums.map(([n,l]) =>
+    `<span><b>${n}</b> ${l}</span>`).join("")}</div>`;
+  if(v.p) html += `<p>${esc(v.p)}</p>`;
+  html += `</div>`;
+
+  html += `<h3 class="sec">ملفات الكان — <b>${esc(mk)} ${esc(md)}</b></h3>
+    <div class="list">${v.inYear.map(fileRow).join("") ||
+      '<div class="empty">مفيش ملفات</div>'}</div>`;
+
+  // his second path, offered from here too when nothing is fitted:
+  if(!v.inYear.some(f => f.f)) html += genericBlock(mk+" "+md);
+  $("out").innerHTML = html;
+}
+
+function genericBlock(query){
+  const gens = state.v.filter(v => v.g)
+    .sort((a,b) => b.f - a.f);
   const words = terms(query);
-  const heavy = words.some(w => HEAVY.some(h => h.includes(w) || w.includes(h)));
-  const generic = state.vehicles
-    .filter(v => /^\s*(j1939|fms|obd)/i.test(v.n || ""))
-    .sort((a, b) => b.f - a.f).slice(0, 3);
-  return `<div class="note">
-    <h3>مفيش ملف مخصص لـ «${esc(query)}»</h3>
-    ${heavy ? `<p>دي شكلها مركبة تقيلة. المركبات التقيلة بتتكلم البروتوكول
-        العام، فجرّبه قبل ما تبعت فني.</p>
-      <div class="rows">${generic.map(v => `<div class="row">
-        <span class="n">${v.f}</span><span>${esc(v.n)}</span>
-        <span class="why">CAN${v.b || "?"}${v.kb ? " · " + v.kb + "kbps" : ""}</span>
-      </div>`).join("")}</div>`
-      : `<p>لو دي مركبة تقيلة، البروتوكول العام غالبًا هيشتغل. لو عربية ركاب،
-         التجربة في الميدان هي الطريقة الوحيدة للتأكد.</p>`}
-    <ul>
-      <li>اكتب الاسم بشكل تاني، أو الموديل لوحده</li>
-      <li>سجّل نتيجة أي تجربة ميدانية عشان السؤال ما يتكررش</li>
-    </ul>
-  </div>`;
+  const matched = words.length ? state.cfg.filter(c =>
+    c.g && words.some(w => c._h.includes(w))) : [];
+  let html = `<h3 class="sec">الطريق التاني — <b>البروتوكول العام</b></h3>
+    <div class="list">${gens.map(fileRow).join("")}</div>
+    <div class="note">المركبات التقيلة غالبًا بتتكلم البروتوكول العام حتى من
+      غير ملف باسمها. عربيات الركاب نادرًا.</div>`;
+  html += `<h3 class="sec">إعدادات شغّالة على العام وفي اسمها
+      «<b>${esc(query)}</b>»</h3>`;
+  html += matched.length
+    ? `<div class="list">${matched.slice(0,15).map(cfgRow).join("")}</div>
+       <div class="note">دي أقوى إشارة إن النوع ده اشتغل على العام قبل كده
+         في الأسطول نفسه.</div>`
+    : `<div class="list"><div class="empty">محدش في الأسطول جرّب الاسم ده
+         على العام قبل كده — التجربة الميدانية هي اللي هتحسم.</div></div>`;
+  return html;
 }
 
-function render(query){
-  const out = document.getElementById("out");
-  const year = parseInt(document.getElementById("year").value, 10) || null;
-  if(!query.trim()){ out.innerHTML = ""; return; }
-  const groups = search(query, year);
-  if(!groups.length){ out.innerHTML = miss(query); return; }
-  const files = groups.reduce((n, g) => n + g.files.length, 0);
-  out.innerHTML =
-    `<div class="tally">${groups.length} عربية · ${files} ملف${year ? ` · سنة ${year}` : ""}</div>`
-    + groups.slice(0, 25).map(card).join("");
+function renderFree(){
+  const q = $("free").value.trim();
+  if(!q){ return; }
+  $("mk").value = ""; $("md").disabled = true; $("yr").disabled = true;
+  $("out").innerHTML =
+    `<div class="verdict bad"><h2>مفيش ملف باسم «${esc(q)}»</h2>
+     <p>مش موجودة في كتالوج Xirgo، فالسؤال بقى: العام هيشغّلها؟</p></div>`
+    + genericBlock(q);
 }
 
-/* --------------------------------------------------------------- panels */
+/* ------------------------------------------------------------- panels */
 function gauges(){
   const m = state.meta;
-  document.getElementById("gauges").innerHTML = `
+  $("gauges").innerHTML = `
     <div class="gauge"><b>${m.files.toLocaleString("en")}</b> ملف كان</div>
     <div class="gauge"><b>${m.fitted_devices.toLocaleString("en")}</b>
       من ${m.devices.toLocaleString("en")} جهاز عليه ملف</div>`;
 }
-
+const STATE_AR = {
+  "file assigned": "عليه ملف كان",
+  "(CAN port present, no file assigned)": "منفذ كان موجود، من غير ملف",
+  "(no CAN ports on this device)": "الجهاز من غير منافذ كان",
+  "(no configuration)": "من غير ملف إعداد أصلًا",
+};
 function fleetPanel(){
   const f = state.fleet;
-  document.getElementById("p-fleet").innerHTML = `
-    <p class="lead">إيه اللي متركّب في الأسطول دلوقتي، مقروء من إعدادات الأجهزة
-      نفسها مش من ورق.</p>
-    <div class="rows">${f.estate.map(r => `<div class="row">
+  $("p-fleet").innerHTML = `
+    <p class="lead">إيه اللي متركّب في الأسطول، مقروء من إعدادات الأجهزة نفسها.</p>
+    <div class="list">${f.estate.map(r => `<div class="row">
       <span class="n">${r.devices.toLocaleString("en")}</span>
-      <span>${esc(r.state === "file assigned" ? "عليه ملف كان" : r.state)}</span>
-    </div>`).join("")}</div>
+      <span>${esc(STATE_AR[r.state] || r.state)}</span></div>`).join("")}</div>
     <h3 class="sec">أكتر الموديلات في الأسطول</h3>
-    <div class="rows">${f.top.slice(0, 20).map(r => `<div class="row">
+    <div class="list">${f.top.slice(0,20).map(r => `<div class="row">
       <span class="n">${r.devices.toLocaleString("en")}</span>
-      <span>${esc(r.name)}</span>
-    </div>`).join("")}</div>`;
+      <span>${esc(r.name)}</span></div>`).join("")}</div>`;
 }
-
 const LEADS = {
-  candidate: ["منفذ كان فاضي واسم الإعداد بيقول عربية عندنا ملفها",
-              "أقرب شغل: الملف يتسند من المكتب من غير زيارة"],
-  upgrade:   ["شغّالة على البروتوكول العام واسمها بيقول موديل عندنا ملف مخصص له",
-              "الملف المخصص بيدي إشارات أكتر من العام"],
-  mismatch:  ["الملف المركّب لصانع غير اللي اسم الإعداد بيقوله",
-              "غالبًا اسم قديم ما اتغيّرش، وأحيانًا تركيب غلط"],
+  candidate:["منفذ كان فاضي واسم الإعداد بيقول عربية عندنا ملفها",
+             "أقرب شغل: الملف يتسند من المكتب من غير زيارة"],
+  upgrade:  ["شغّالة على العام واسمها بيقول موديل ليه ملف مخصص",
+             "الملف المخصص بيدي إشارات أكتر"],
+  mismatch: ["الملف المركّب لصانع غير اللي الاسم بيقوله",
+             "غالبًا اسم قديم، وأحيانًا تركيب غلط"],
 };
-
 function leadsPanel(){
-  const h = (state.fleet.hints) || {};
-  const parts = Object.entries(LEADS).map(([kind, [title, why]]) => {
+  const h = state.fleet.hints || {};
+  const parts = Object.entries(LEADS).map(([kind,[title,why]]) => {
     const rows = h[kind] || [];
     if(!rows.length) return "";
-    const total = rows.reduce((n, r) => n + r.devices, 0);
-    return `<h3 class="sec">${esc(title)} — ${total} جهاز</h3>
+    const total = rows.reduce((s,r) => s+r.devices, 0);
+    return `<h3 class="sec">${esc(title)} — <b>${total}</b> جهاز</h3>
       <p class="lead">${esc(why)}</p>
-      <div class="rows">${rows.slice(0, 12).map(r => `<div class="row">
+      <div class="list">${rows.slice(0,12).map(r => `<div class="row">
         <span class="n">${r.devices}</span>
         <span>${esc(r.make)}<span class="ev">${esc(r.sample)}</span></span>
         ${r.now_on ? `<span class="why">${esc(r.now_on)}</span>` : ""}
       </div>`).join("")}</div>`;
   }).join("");
-  document.getElementById("p-leads").innerHTML = parts || `
-    <p class="lead">مفيش ترشيحات دلوقتي.</p>`;
-  document.getElementById("p-leads").insertAdjacentHTML("beforeend",
-    `<p class="lead" style="margin-top:22px">دي قراءات من نص كتبه الفنيين في
-      أسماء الإعدادات، مش حقائق من الأجهزة. الاسم ممكن يكون قديم، فكل سطر
-      محتاج نظرة قبل ما حد يتحرك.</p>`);
+  $("p-leads").innerHTML = (parts ||
+    '<p class="lead">مفيش ترشيحات دلوقتي.</p>')
+    + `<p class="lead" style="margin-top:20px">دي قراءات من نص كتبه الفنيين،
+       مش حقائق من الأجهزة — كل سطر محتاج نظرة قبل التحرك.</p>`;
 }
-
 function newPanel(){
   const rows = state.meta.new_files || [];
-  document.getElementById("p-new").innerHTML = rows.length
-    ? `<p class="lead">عربيات بقت مدعومة في آخر شهر. Xirgo بتضيف ملفات باستمرار،
-         ودي حاجة المبيعات تقدر تتحرك بيها.</p>
-       <div class="rows">${rows.map(r => `<div class="row">
+  $("p-new").innerHTML = rows.length
+    ? `<p class="lead">عربيات بقت ليها ملفات في آخر شهر.</p>
+       <div class="list">${rows.map(r => `<div class="row">
          <span>${esc(r.name)}</span>
-         <span class="why">${esc((r.since || "").slice(0, 10))}</span>
+         <span class="why">${esc((r.since||"").slice(0,10))}</span>
        </div>`).join("")}</div>`
-    : `<p class="lead">مفيش ملفات جديدة في آخر شهر.</p>`;
+    : '<p class="lead">مفيش ملفات جديدة في آخر شهر.</p>';
 }
-
 function stamp(){
-  const m = state.meta;
-  document.getElementById("stamp").textContent =
-    `آخر تحديث للبيانات: ${m.generated_at}`;
+  $("stamp").textContent = "آخر تحديث للبيانات: " + state.meta.generated_at;
 }
 
-/* ---------------------------------------------------------------- events */
-let timer;
-document.getElementById("q").addEventListener("input", e => {
-  clearTimeout(timer);
-  timer = setTimeout(() => render(e.target.value), 110);
+/* -------------------------------------------------------------- wires */
+$("mk").addEventListener("change", () => {
+  $("free").value = "";
+  $("yr").disabled = true; $("yr").innerHTML = "<option value=''>—</option>";
+  $("out").innerHTML = "";
+  if($("mk").value) buildModels($("mk").value);
+  else { $("md").disabled = true; }
 });
-document.getElementById("year").addEventListener("input", () => {
-  render(document.getElementById("q").value);
+$("md").addEventListener("change", () => {
+  if(!$("md").value) return;
+  buildYears(filesFor($("mk").value, $("md").value));
+  renderPick();
 });
-document.getElementById("out").addEventListener("click", e => {
-  const btn = e.target.closest(".more");
+$("yr").addEventListener("change", renderPick);
+$("reset").addEventListener("click", () => {
+  $("mk").value = ""; $("md").disabled = true; $("yr").disabled = true;
+  $("md").innerHTML = $("yr").innerHTML = "<option value=''>—</option>";
+  $("free").value = ""; $("out").innerHTML = "";
+});
+let ft;
+$("free").addEventListener("input", () => {
+  clearTimeout(ft); ft = setTimeout(renderFree, 200);
+});
+$("out").addEventListener("click", e => {
+  const btn = e.target.closest(".sx");
   if(!btn) return;
-  const v = state.vehicles.find(x => x.i === +btn.dataset.all);
-  if(!v) return;
-  btn.previousElementSibling.innerHTML =
-    (v.s || []).map(s => `<span class="s">${esc(s)}</span>`).join("")
-    + (v.x || []).map(s => `<span class="s no">${esc(s)}</span>`).join("");
-  btn.remove();
+  const f = state.v.find(x => x.i === +btn.dataset.sx);
+  const li = btn.closest(".li");
+  const old = li.querySelector(".sensors");
+  if(old){ old.remove(); return; }
+  const chips = (f.s||[]).map(s => `<span class="s">${esc(s)}</span>`).join("")
+    + (f.x||[]).map(s => `<span class="s no">${esc(s)}</span>`).join("");
+  li.insertAdjacentHTML("beforeend",
+    `<div class="sensors">${chips || "<span class='s no'>مفيش إشارات معلنة</span>"}</div>`);
 });
-
-const EXAMPLES = ["مرسيدس أكتروس", "شاكمان", "كيا بيجاس", "فولفو", "هيونداي أكسنت"];
-document.getElementById("chips").innerHTML =
-  EXAMPLES.map(x => `<button class="chip">${x}</button>`).join("");
-document.getElementById("chips").addEventListener("click", e => {
-  if(!e.target.classList.contains("chip")) return;
-  const q = document.getElementById("q");
-  q.value = e.target.textContent;
-  q.focus();
-  render(q.value);
-});
-
 document.querySelectorAll(".tab").forEach(tab => {
   tab.addEventListener("click", () => {
     document.querySelectorAll(".tab").forEach(t => {
       const on = t === tab;
       t.setAttribute("aria-selected", on);
-      document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
+      $(t.getAttribute("aria-controls")).hidden = !on;
     });
   });
 });
-
 load();
 </script>
 </body>

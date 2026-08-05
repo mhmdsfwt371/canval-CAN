@@ -41,16 +41,43 @@ def _round_kb(n) -> int | None:
     return int(n) if n else None
 
 
+GENERIC = ("j1939", "fms", "obd", "test", "ack")
+
+
+def _is_generic(name: str) -> bool:
+    """The handful of protocol files that fit no particular vehicle."""
+    head = (name or "").strip().lower()
+    return any(head.startswith(g) for g in GENERIC)
+
+
+def _active_expr() -> str:
+    """last_activity holds epoch seconds or milliseconds depending on the
+    sweep that wrote it; treat anything implausibly large as millis."""
+    cutoff = "strftime('%s','now','-30 days')"
+    return (f"(CASE WHEN last_activity > 100000000000 "
+            f"THEN last_activity/1000 ELSE last_activity END) >= {cutoff}")
+
+
 def export_vehicles(conn) -> list[dict]:
-    """One entry per catalogue file, with how many devices carry it.
+    """One entry per catalogue file, with the numbers the verdict needs:
+    devices carrying it, devices heard from this month, and how many
+    configurations assign it.
 
     Keys are short on purpose. Spelled out, the same payload is nearly
     twice the size, and every byte here is downloaded by every person who
     opens the page.
     """
-    fitted = {r["file_id"]: r["n"] for r in conn.execute(
-        """SELECT file_id, COUNT(DISTINCT imei) n FROM device_can
-            WHERE file_id IS NOT NULL GROUP BY file_id""")}
+    fitted, active, configs = {}, {}, {}
+    for r in conn.execute(
+            f"""SELECT file_id, COUNT(DISTINCT imei) n,
+                       COUNT(DISTINCT CASE WHEN {_active_expr()}
+                                           THEN imei END) a,
+                       COUNT(DISTINCT NULLIF(config_name, '')) c
+                  FROM device_can WHERE file_id IS NOT NULL
+                 GROUP BY file_id"""):
+        fitted[r["file_id"]] = r["n"]
+        active[r["file_id"]] = r["a"]
+        configs[r["file_id"]] = r["c"]
 
     sensors: dict[int, dict[str, list]] = {}
     for row in conn.execute(
@@ -74,6 +101,12 @@ def export_vehicles(conn) -> list[dict]:
             "n": row["name"] or row["raw_model"],
             "f": fitted.get(row["file_id"], 0),
         }
+        if active.get(row["file_id"]):
+            entry["a"] = active[row["file_id"]]
+        if configs.get(row["file_id"]):
+            entry["c"] = configs[row["file_id"]]
+        if _is_generic(entry["n"]):
+            entry["g"] = 1
         # Only carry what is actually set. Thousands of nulls cost more
         # than the branches needed to skip them.
         for key, value in (("v", row["vmid"]), ("mk", row["make"]),
@@ -88,6 +121,40 @@ def export_vehicles(conn) -> list[dict]:
             entry["s"] = s["ok"]
         if s["no"]:
             entry["x"] = s["no"]
+        out.append(entry)
+    return out
+
+
+def export_configs(conn) -> list[dict]:
+    """Configuration names running on the generic protocol files.
+
+    This is the second path of the sales flow. When no dedicated file
+    exists for a vehicle, the question becomes: has anyone in this fleet
+    already run that vehicle on the generic protocol? The evidence is in
+    the configuration names -- "Al-Khaldi Mercedes Actros ... " assigned
+    to J1939 FMS -- so the page needs those names to search through.
+
+    Only names, counts and the file they point at. No device identifiers.
+    """
+    out = []
+    for r in conn.execute(
+            f"""SELECT d.config_name nm, f.name fl,
+                       COUNT(DISTINCT d.imei) n,
+                       COUNT(DISTINCT CASE WHEN {_active_expr()}
+                                           THEN d.imei END) a
+                  FROM device_can d JOIN can_files f ON f.file_id = d.file_id
+                 WHERE d.config_name IS NOT NULL AND d.config_name != ''
+                 GROUP BY d.config_name, f.name
+                 ORDER BY n DESC"""):
+        # Only names running on the generic protocols are shipped. Names
+        # on dedicated files answer no question the page asks, and every
+        # configuration name published is a little more of the fleet on a
+        # URL -- the export stops at exactly what the second path needs.
+        if not _is_generic(r["fl"]):
+            continue
+        entry = {"nm": r["nm"], "fl": r["fl"], "n": r["n"], "g": 1}
+        if r["a"]:
+            entry["a"] = r["a"]
         out.append(entry)
     return out
 
@@ -178,11 +245,13 @@ def main(argv=None) -> int:
 
     with connect(args.db) as conn:
         vehicles = export_vehicles(conn)
+        configs = export_configs(conn)
         fleet = export_fleet(conn)
         meta = export_meta(conn, vehicles)
 
     written = []
     for name, payload in (("vehicles.json", vehicles),
+                          ("configs.json", configs),
                           ("fleet.json", fleet),
                           ("meta.json", meta)):
         path = out / name
