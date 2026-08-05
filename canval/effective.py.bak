@@ -1,4 +1,4 @@
-﻿"""Which CAN file a device actually runs -- inherited values included.
+"""Which CAN file a device actually runs -- inherited values included.
 
 WHY THIS MODULE EXISTS
 ----------------------
@@ -408,7 +408,7 @@ def save_map(conn, template_id, buses, branches):
 
 def sweep_devices(client, db_path, hardware_ids=None, active_since_days=60,
                   concurrency=6, verify_sample=2, limit=None, chunk=200,
-                  map_max_age_days=30, refresh_after_days=2, force=False,
+                  map_max_age_days=30, refresh_after_days=7, force=False,
                   prune=True, progress=None, notice=None):
     """Read every device's effective CAN assignment and store it by bus.
 
