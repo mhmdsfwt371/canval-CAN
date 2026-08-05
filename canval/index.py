@@ -124,7 +124,7 @@ def _extract_model_entries(overrides: list[dict]) -> list[tuple[str, int | None,
     return found
 
 
-def build_device_index(
+def _build_device_index_v1(
     client,
     db_path: str,
     hardware_ids: list[int] | None = None,
@@ -291,3 +291,31 @@ def build_device_index(
 
     stats["calls"] = calls
     return stats
+
+
+def build_device_index(client, db_path: str, hardware_ids=None,
+                       active_since_days: int | None = 60,
+                       concurrency: int = 6, sample_configs: int = 0,
+                       verify_sample: int = 2, limit: int | None = None,
+                       refresh_after_days: int = 7, force: bool = False,
+                       progress=None, notice=None) -> dict:
+    """Sweep devices and record the CAN file each one effectively runs.
+
+    The v1 reader is kept below as `_build_device_index_v1` for reference.
+    It read overrides only, and keyed rows by element name; both were
+    wrong in ways that produced confident, plausible, false answers. See
+    canval/effective.py for what replaced it and why.
+
+    `sample_configs` is accepted and ignored. Sampling was already shown
+    to write off configurations of hundreds of devices on the strength of
+    the first three, and the new reader is cheap enough that the shortcut
+    has nothing left to buy.
+    """
+    from .effective import sweep_devices
+
+    return sweep_devices(
+        client, db_path, hardware_ids=hardware_ids,
+        active_since_days=active_since_days, concurrency=concurrency,
+        verify_sample=verify_sample, limit=limit,
+        refresh_after_days=refresh_after_days, force=force,
+        progress=progress, notice=notice)

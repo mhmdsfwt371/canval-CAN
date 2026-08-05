@@ -78,20 +78,37 @@ CREATE TABLE IF NOT EXISTS can_sensors (
     PRIMARY KEY (file_id, source, sensor_name)
 );
 
--- One row per device PER BUS. A device carries a separate vehicle-model
--- override for CAN1 and CAN2, and they are often different files: one
--- real device had 3355 on one bus and 1967 on the other. Keying by imei
--- alone silently kept whichever arrived first and dropped the rest.
+-- One row per device PER BUS, keyed by the bus itself.
+--
+-- The previous key was (imei, element_name), which looked right and was
+-- not: CAN1 and CAN2 both call their element "Vehicle model", so the
+-- second row overwrote the first and one of the two files disappeared.
+-- The whole 6475-device sweep produced zero devices with more than one
+-- row, on an estate where dual-bus fitments are ordinary.
+--
+-- `inherited` records where the value came from. Most devices inherit
+-- theirs from the configuration template rather than overriding it, and
+-- an earlier reader that only looked at overrides therefore reported 95%
+-- of the estate as never fitted.
+--
+-- `port_function` is context, not a filter. A port set to Sleep can still
+-- carry an assigned model, and the question being answered is whether the
+-- file is assigned -- not whether the port happens to be awake today.
 CREATE TABLE IF NOT EXISTS device_can (
-    imei         TEXT NOT NULL,
-    element_name TEXT NOT NULL,
-    file_id      INTEGER,
-    raw_value    TEXT,
-    hardware     TEXT,
-    config_name  TEXT,
+    imei          TEXT    NOT NULL,
+    bus           INTEGER NOT NULL,   -- 1 = CAN1, 2 = CAN2, 0 = nothing found
+    element_name  TEXT    NOT NULL,
+    element_id    INTEGER,
+    file_id       INTEGER,
+    raw_value     TEXT,
+    inherited     INTEGER,            -- 1 = from the template, 0 = set here
+    port_function TEXT,
+    hardware      TEXT,
+    config_name   TEXT,
+    template_id   INTEGER,
     last_activity INTEGER,
-    seen_at      TEXT DEFAULT (datetime('now')),
-    PRIMARY KEY (imei, element_name)
+    seen_at       TEXT DEFAULT (datetime('now')),
+    PRIMARY KEY (imei, bus)
 );
 CREATE INDEX IF NOT EXISTS ix_dc_file ON device_can(file_id);
 CREATE INDEX IF NOT EXISTS ix_dc_imei ON device_can(imei);
@@ -196,6 +213,7 @@ def connect(path: str):
     conn.execute("PRAGMA foreign_keys=ON")
     try:
         conn.executescript(SCHEMA)
+        _migrate(conn)
         yield conn
         conn.commit()
     finally:
@@ -941,3 +959,86 @@ def files_for(conn, makes, models, years=None) -> list:
     return sorted(best.values(),
                   key=lambda r: (-(r["installs"] or 0), r["make"] or "",
                                  r["model"] or "", r["can_bus"] or 99))
+
+
+# ------------------------------------------------------------- migration
+
+def _migrate(conn) -> None:
+    """Move an old device_can aside rather than reshaping it.
+
+    The v1 rows cannot be salvaged: they were keyed by element name, so a
+    dual-bus device lost one of its two files, and they only ever recorded
+    overrides, so an inherited assignment reads as absent. Converting them
+    would carry both errors forward wearing a new schema.
+
+    The old table is kept, not dropped. Diffing it against the next sweep
+    is the clearest possible statement of what the tool was missing, and
+    that is worth more than the disk it costs.
+    """
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(device_can)")}
+    if not cols or "bus" in cols:
+        return
+    stamp = conn.execute("SELECT strftime('%Y%m%d_%H%M%S','now')").fetchone()[0]
+    conn.execute(f"ALTER TABLE device_can RENAME TO device_can_v1_{stamp}")
+    conn.executescript(SCHEMA)
+
+
+def record_device_bus(conn, imei: str, bus: int, *, element_name: str = "(none)",
+                      element_id=None, file_id=None, raw_value=None,
+                      inherited=None, port_function=None, hardware=None,
+                      config_name=None, template_id=None,
+                      last_activity=None) -> None:
+    """Record one bus of one device. Bus 0 means nothing was assigned."""
+    conn.execute(
+        """INSERT INTO device_can
+           (imei, bus, element_name, element_id, file_id, raw_value,
+            inherited, port_function, hardware, config_name, template_id,
+            last_activity, seen_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?, datetime('now'))
+           ON CONFLICT(imei, bus) DO UPDATE SET
+             element_name=excluded.element_name,
+             element_id=excluded.element_id, file_id=excluded.file_id,
+             raw_value=excluded.raw_value, inherited=excluded.inherited,
+             port_function=excluded.port_function,
+             hardware=excluded.hardware, config_name=excluded.config_name,
+             template_id=excluded.template_id,
+             last_activity=excluded.last_activity, seen_at=datetime('now')""",
+        (imei, int(bus), element_name or "(none)", element_id, file_id,
+         raw_value, inherited, port_function, hardware, config_name,
+         template_id, last_activity),
+    )
+
+
+def coverage_detail(conn) -> dict:
+    """Coverage split by where the value came from.
+
+    The inherited count is the headline: it is everything the previous
+    reader was blind to.
+    """
+    row = conn.execute(
+        """SELECT COUNT(DISTINCT imei) devices,
+                  COUNT(DISTINCT CASE WHEN file_id IS NOT NULL THEN imei END) fitted,
+                  SUM(file_id IS NOT NULL) buses,
+                  SUM(file_id IS NOT NULL AND inherited = 1) inherited,
+                  SUM(file_id IS NOT NULL AND inherited = 0) overridden
+             FROM device_can""").fetchone()
+    dual = conn.execute(
+        """SELECT COUNT(*) n FROM (
+             SELECT imei FROM device_can WHERE file_id IS NOT NULL
+             GROUP BY imei HAVING COUNT(*) > 1)""").fetchone()["n"]
+    orphan = conn.execute(
+        """SELECT COUNT(*) n FROM device_can d
+            WHERE d.file_id IS NOT NULL
+              AND NOT EXISTS (SELECT 1 FROM can_files f
+                               WHERE f.file_id = d.file_id)""").fetchone()["n"]
+    total = row["devices"] or 0
+    fitted = row["fitted"] or 0
+    return {
+        "devices": total, "fitted": fitted, "unfitted": total - fitted,
+        "pct": round(100 * fitted / total, 1) if total else 0.0,
+        "bus_entries": row["buses"] or 0,
+        "inherited": row["inherited"] or 0,
+        "overridden": row["overridden"] or 0,
+        "dual_bus_devices": dual,
+        "pointing_at_missing_file": orphan,
+    }

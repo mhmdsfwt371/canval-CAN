@@ -109,6 +109,22 @@ class XdmClient:
 
             if not resp.content:
                 return None
+
+            # The gateway answers 200 with the web app's HTML for any path
+            # it does not implement, so a wrong path arrives looking like a
+            # success and only fails at the JSON parse. That surfaced as
+            # "Expecting value: line 1 column 1", which reads like a broken
+            # server rather than a typo and cost several hours of chasing
+            # the wrong thing. Name it here instead.
+            ctype = resp.headers.get("Content-Type", "")
+            if "json" not in ctype.lower():
+                raise XdmError(
+                    f"{method} {path} -> {resp.status_code} but the body is "
+                    f"{ctype.split(';')[0] or 'untyped'}, not JSON "
+                    f"({len(resp.content)} bytes). This endpoint serves the "
+                    f"web app for unknown paths, so the path is almost "
+                    f"certainly wrong rather than the server being down."
+                )
             return resp.json()
 
         raise XdmError(f"{method} {path} failed after retries: {last}")

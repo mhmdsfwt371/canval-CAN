@@ -1,0 +1,918 @@
+﻿============================== canval.afaqy ==============================
+"""Adapter for the tracking platform (api.afaqy.pro).
+
+All of this is read off a real capture of POST /units/view, not inferred.
+
+REQUEST
+-------
+    POST {BASE}/units/view?token=<token>
+    Content-Type: application/json
+
+    {"data": "{\\"id\\":\\"<unit id>\\",\\"simplify\\":1}"}
+
+Note the body: the payload is a JSON *string* nested inside a `data`
+field, so it has to be encoded twice. Sending a plain object fails.
+
+RESPONSE
+--------
+    data.i                                     IMEI
+    data.id                                    unit id (used in requests)
+    data.n                                     display name
+    data.device_model                          e.g. "LX45 CAN"
+    data.crat / data.upat                      created / updated (ISO, local)
+    data.sensors[]                             sensor definitions, see below
+    data.lu.dtt                                device time of last message (ms)
+    data.lu.dts                                server receive time (ms)
+    data.lu.chPrams.<param>                    {className, v, cdt}
+    data.lu.sensors_chDate.<type>[0].changeDate
+
+`cdt` is a CHANGE time, not a receive time -- the field name says so, and
+the block `sensors_chDate` spells it out. A stale value is one with no
+reason to move, not a dead signal.
+
+THE CONVERSION IS IN THE PAYLOAD
+--------------------------------
+Each sensor definition carries its own conversion:
+
+    n               display name        "Total Engine Hours"
+    t               type                "eng_hour"
+    param           raw parameter key   "sensor_16386"
+    units           "H"
+    formula         one of * / - +
+    formula_value   the operand         0.05
+    calibration     [{x, y}, ...]       optional curve, raw -> engineering
+    result_type     "value" or "logic"
+    text_0 / text_1 labels for logic sensors
+
+So the scale factors do not have to be guessed, and must not be
+hardcoded: they are configured per unit and shipped with every response.
+Reading them from the payload also means a unit with an unusual setup
+decodes correctly instead of quietly wrong.
+
+Calibration takes the RAW value on its x axis, not a percentage.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from dataclasses import dataclass, field
+from datetime import datetime
+
+from .monitor import MonitorAdapter, Parameter, SensorDefinition, VehicleState
+
+BASE_URL = "https://api.afaqy.pro"
+
+# Sensor-type keys as they appear in `t` and under sensors_chDate.
+SENSOR_TYPE_LABELS = {
+    "acc": "Ignition ACC",
+    "ex_battery_volt": "External Battery Volt",
+    "in_battery_volt": "Internal Battery Volt",
+    "engine_temperature": "Engine Temperature",
+    "rpm": "RPM",
+    "fuel_level": "Fuel Level",
+    "milage": "Engine Mileage",
+    "eng_hour": "Engine Hours",
+    "weight": "Weight",
+    "total_fuel_can": "Total Fuel Can",
+}
+
+_ISO_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})")
+
+
+def parse_iso(text) -> int | None:
+    if not text:
+        return None
+    m = _ISO_RE.match(str(text))
+    if not m:
+        return None
+    try:
+        return int(datetime(*map(int, m.groups())).timestamp())
+    except ValueError:
+        return None
+
+
+# ------------------------------------------------------------- conversion
+
+@dataclass
+class SensorSpec:
+    """One sensor definition, with everything needed to decode it."""
+    name: str
+    type: str
+    param: str
+    units: str = ""
+    formula: str = ""
+    formula_value: object = None
+    calibration: list = field(default_factory=list)
+    result_type: str = "value"
+    text_0: str = ""
+    text_1: str = ""
+
+    @property
+    def calibrated(self) -> bool:
+        return len(self.calibration) >= 2
+
+    def convert(self, raw):
+        """Raw parameter value -> engineering value, the platform's way."""
+        try:
+            x = float(raw)
+        except (TypeError, ValueError):
+            return raw
+
+        if self.calibrated:
+            return _interpolate(x, self.calibration)
+
+        fv = self.formula_value
+        if fv in ("", None) or not self.formula:
+            return x
+        try:
+            fv = float(fv)
+        except (TypeError, ValueError):
+            return x
+
+        if self.formula == "*":
+            return x * fv
+        if self.formula == "/":
+            return x / fv if fv else x
+        if self.formula == "-":
+            return x - fv
+        if self.formula == "+":
+            return x + fv
+        return x
+
+    def render(self, raw) -> str:
+        """Human-readable, matching what the platform shows on screen.
+
+        Two decimals with trailing zeros stripped reproduces the display
+        exactly, including 1388.625 -> 1388.62 (round-half-to-even).
+        """
+        if self.result_type == "logic":
+            try:
+                return self.text_1 if float(raw) else self.text_0
+            except (TypeError, ValueError):
+                return str(raw)
+        value = self.convert(raw)
+        if isinstance(value, float):
+            value = round(value, 2)
+            if value == int(value):
+                value = int(value)
+        return f"{value} {self.units}".strip()
+
+
+def _interpolate(x: float, points: list) -> float:
+    """Piecewise-linear lookup, clamped at both ends.
+
+    Verified against the sampled unit: raw 92 on its eight-point fuel
+    curve gives 462.5 L, exactly what the platform displayed.
+    """
+    pts = sorted(
+        ({"x": float(p["x"]), "y": float(p["y"])} for p in points
+         if isinstance(p, dict) and "x" in p and "y" in p),
+        key=lambda p: p["x"],
+    )
+    if not pts:
+        return x
+    if x <= pts[0]["x"]:
+        return pts[0]["y"]
+    if x >= pts[-1]["x"]:
+        return pts[-1]["y"]
+    for a, b in zip(pts, pts[1:]):
+        if a["x"] <= x <= b["x"]:
+            span = b["x"] - a["x"]
+            if span == 0:
+                return a["y"]
+            return a["y"] + (x - a["x"]) * (b["y"] - a["y"]) / span
+    return x
+
+
+def parse_sensor_specs(payload: dict) -> list[SensorSpec]:
+    data = (payload or {}).get("data") or {}
+    out = []
+    for s in data.get("sensors") or []:
+        if not isinstance(s, dict):
+            continue
+        out.append(
+            SensorSpec(
+                name=str(s.get("n") or ""),
+                type=str(s.get("t") or ""),
+                param=str(s.get("param") or ""),
+                units=str(s.get("units") or ""),
+                formula=str(s.get("formula") or ""),
+                formula_value=s.get("formula_value"),
+                calibration=s.get("calibration") or [],
+                result_type=str(s.get("result_type") or "value"),
+                text_0=str(s.get("text_0") or ""),
+                text_1=str(s.get("text_1") or ""),
+            )
+        )
+    return out
+
+
+# ------------------------------------------------------------- unit view
+
+@dataclass
+class UnitView:
+    unit_id: str | None
+    imei: str | None
+    name: str | None
+    device_model: str | None
+    created_at: int | None
+    last_message: int | None
+    server_time: int | None
+    parameters: list[Parameter]
+    specs: list[SensorSpec]
+    sensor_change: dict[str, int]
+    state: VehicleState = field(default_factory=VehicleState)
+
+    @property
+    def spec_by_param(self) -> dict[str, SensorSpec]:
+        return {s.param: s for s in self.specs if s.param}
+
+
+def parse_unit_view(payload: dict) -> UnitView:
+    data = (payload or {}).get("data") or {}
+    lu = data.get("lu") or {}
+
+    dtt, dts = lu.get("dtt"), lu.get("dts")
+
+    params = [
+        Parameter(key=key, value=entry.get("v"), changed_at=int(entry["cdt"]) // 1000)
+        for key, entry in (lu.get("chPrams") or {}).items()
+        if isinstance(entry, dict) and entry.get("cdt")
+    ]
+
+    sensor_change = {}
+    for stype, entries in (lu.get("sensors_chDate") or {}).items():
+        if isinstance(entries, list) and entries:
+            cd = (entries[0] or {}).get("changeDate")
+            if cd:
+                sensor_change[stype] = int(cd) // 1000
+
+    motion = (lu.get("unit_state") or {}).get("motion") or {}
+    state = VehicleState(
+        state=str(motion.get("state") or ""),
+        since=int(motion["cdt"]) // 1000 if motion.get("cdt") else 0,
+    )
+
+    return UnitView(
+        unit_id=data.get("id"),
+        imei=data.get("i"),
+        name=data.get("n"),
+        device_model=data.get("device_model"),
+        created_at=parse_iso(data.get("crat")),
+        last_message=int(dtt) // 1000 if dtt else None,
+        server_time=int(dts) // 1000 if dts else None,
+        parameters=sorted(params, key=lambda p: -p.changed_at),
+        specs=parse_sensor_specs(payload),
+        sensor_change=sensor_change,
+        state=state,
+    )
+
+
+def setup_batch(view: UnitView, spread: int = 1800, min_size: int = 3) -> set[str]:
+    """Parameters written once at unit setup that never carried real data.
+
+    The payload mixes timezones -- data.crat came back as local time while
+    data.sensors[].crat was UTC for the same instant, three hours apart.
+    Anchoring on either would mislabel signals on units created elsewhere,
+    so the batch is found in the data: the oldest parameters, where several
+    share a timestamp within `spread` seconds, are one write rather than a
+    coincidence. On the sampled unit thirteen landed inside a minute, 200
+    days ago, and never moved since.
+
+    created_at only sanity-checks the result, it never defines it.
+    """
+    if len(view.parameters) < min_size:
+        return set()
+
+    oldest = sorted(view.parameters, key=lambda p: p.changed_at)
+    anchor = oldest[0].changed_at
+    batch = [p for p in oldest if p.changed_at - anchor <= spread]
+    if len(batch) < min_size:
+        return set()
+
+    # A young unit has no setup batch to speak of; condemn nothing.
+    if view.last_message and (view.last_message - anchor) < 86400:
+        return set()
+
+    if view.created_at is not None and abs(view.created_at - anchor) > 15 * 3600:
+        return set()      # further apart than any timezone: do not trust it
+
+    return {p.key for p in batch}
+
+
+def to_definitions(view: UnitView) -> list[SensorDefinition]:
+    return [
+        SensorDefinition(display_name=s.name, sensor_type=s.type, parameter_key=s.param)
+        for s in view.specs
+        if s.param
+    ]
+
+
+# --------------------------------------------------------------- adapter
+
+class AfaqyAdapter(MonitorAdapter):
+    def __init__(self, token: str, session=None, base_url: str = BASE_URL):
+        import requests
+
+        self.token = token
+        self.base_url = base_url.rstrip("/")
+        self.session = session or requests.Session()
+        self.session.headers.update({
+            "Accept": "application/json, text/plain, */*",
+            "Content-Type": "application/json",
+        })
+        self._views: dict[str, UnitView] = {}
+        self._imei_to_unit: dict[str, str] = {}
+
+    def _post(self, path: str, inner: dict) -> dict:
+        # the payload is a JSON string inside a `data` field: encoded twice
+        resp = self.session.post(
+            f"{self.base_url}{path}",
+            params={"token": self.token},
+            json={"data": json.dumps(inner)},
+            timeout=60,
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def view(self, unit_id: str) -> UnitView:
+        if unit_id not in self._views:
+            raw = self._post("/units/view", {"id": unit_id, "simplify": 1})
+            self._views[unit_id] = parse_unit_view(raw)
+        return self._views[unit_id]
+
+    # Only the three blocks this tool needs. The API supports thirteen;
+    # asking for the rest would drag in driver behaviour, job orders and
+    # other customer data we have no business pulling, and would bloat a
+    # response that is already megabytes wide.
+    FLEET_PROJECTION = ["basic", "last_update", "sensors"]
+
+    def iter_fleet(self, page_size: int = 1000, projection=None):
+        """Walk the whole fleet, yielding a UnitView per unit.
+
+        This is the call that changes the shape of the job. `last_update`
+        carries chPrams with its cdt stamps and `sensors` carries the
+        conversion formulas, so a full estate needs a handful of paginated
+        requests rather than one /units/view per device.
+        """
+        offset = 0
+        while True:
+            raw = self._post(
+                "/v1/units",
+                {
+                    "offset": offset,
+                    "limit": page_size,
+                    "simplify": 1,
+                    "projection": list(projection or self.FLEET_PROJECTION),
+                },
+            )
+
+            items = (raw or {}).get("data")
+            if isinstance(items, dict):
+                items = items.get("items") or items.get("units") or []
+            items = items or []
+
+            for unit in items:
+                if isinstance(unit, dict):
+                    yield parse_unit_view({"data": unit})
+
+            if len(items) < page_size:
+                return
+            offset += page_size
+
+    def load_fleet(self, page_size: int = 1000) -> dict[str, str]:
+        """IMEI -> unit id, built once and reused."""
+        for view in self.iter_fleet(page_size=page_size, projection=["basic"]):
+            if view.imei and view.unit_id:
+                self._imei_to_unit[str(view.imei)] = str(view.unit_id)
+        return self._imei_to_unit
+
+    # ------------------------------------------------ MonitorAdapter
+
+    def find_by_imei(self, imei: str) -> str | None:
+        if not self._imei_to_unit:
+            self.load_fleet()
+        return self._imei_to_unit.get(str(imei))
+
+    def parameters(self, unit_id: str) -> tuple[list[Parameter], int]:
+        v = self.view(unit_id)
+        return v.parameters, v.last_message or 0
+
+    def sensor_definitions(self, unit_id: str) -> list[SensorDefinition]:
+        return to_definitions(self.view(unit_id))
+
+============================== canval.monitor ==============================
+"""The second gate: proof that a CAN file actually produced readings.
+
+READ THIS BEFORE CHANGING THE CLASSIFIER
+----------------------------------------
+The platform's per-parameter timestamp is the time the value **last
+changed**, not the time it was last received. Confirmed on one device
+across two snapshots 22 minutes apart while it idled stationary:
+
+    engine hours  resolution 0.05 h = 3 min   stamp said 2 min ago
+    total fuel    resolution 0.5 L  ~ 22 min  stamp said 12 min ago
+    odometer      vehicle at 0 km/h           stamp said 19 min ago
+                                              = when it last moved
+    ACC           on since the shift started  stamp said 4 hours ago
+    firmware name never changes               stamp said 199 days ago
+
+So an old timestamp does NOT mean a dead signal. It usually means the
+value simply had no reason to change. A parked truck's odometer is stale
+by definition, and punishing it would send a technician to a working
+install.
+
+The rule that follows: staleness is never evidence of absence. Only
+*change* is evidence of life. Everything below is built on that.
+"""
+
+from __future__ import annotations
+
+import abc
+import time
+from dataclasses import dataclass, field
+from enum import Enum
+
+# --------------------------------------------------------------- decoding
+#
+# Raw CAN counters are scaled integers. Each factor here was derived by
+# comparing a raw signal param against the value the platform displayed for
+# the same device at the same moment, then re-confirmed against a second
+# snapshot 22 minutes later. They follow the usual J1939 resolutions.
+
+
+@dataclass(frozen=True)
+class Decoder:
+    label: str
+    scale: float = 1.0
+    offset: float = 0.0
+    unit: str = ""
+    calibrated: bool = False   # platform applies a per-vehicle curve, see below
+    verified_on: str = ""
+
+
+DECODERS: dict[str, Decoder] = {
+    "sensor_16386": Decoder("Total engine hours", 0.05, 0.0, "h",
+                            verified_on="66097 -> 3304.85, +0.35h over 22min"),
+    "sensor_16385": Decoder("Total fuel used", 0.5, 0.0, "L",
+                            verified_on="43651 -> 21825.5, +0.5L over 22min"),
+    "sensor_16387": Decoder("Odometer", 0.005, 0.0, "km",
+                            verified_on="11694080 -> 58470.4"),
+    "sensor_8200": Decoder("Engine temperature", 1.0, -40.0, "C",
+                           verified_on="128 -> 88"),
+    "sensor_12300": Decoder("Engine speed", 0.125, 0.0, "rpm",
+                            verified_on="8199 -> 1024.9"),
+    "sensor_12301": Decoder("Weight", 10.0, 0.0, "kg",
+                            verified_on="3000 -> 30000, 3009 -> 30090"),
+
+    # Fuel level is different and must not be treated like the others.
+    # Raw 92 displayed as 462.5 L gives a ratio of 5.03, which is not a
+    # standard resolution. At the J1939 rate of 0.4 %/bit, 92 is 36.8 %,
+    # and 462.5 L at 36.8 % implies a ~1257 L tank. The label "1st CAL"
+    # says it plainly: the litres come from a per-vehicle calibration
+    # curve configured in the platform, not from the CAN file.
+    #
+    # Consequence for this tool: the CAN file can only be credited with
+    # delivering the raw percentage. Litres are a platform feature and
+    # depend on someone having done the calibration.
+    "sensor_8219": Decoder("Fuel level", 0.4, 0.0, "%", calibrated=True,
+                           verified_on="92 -> 36.8% raw; 462.5 L is calibrated"),
+}
+
+
+def decode(key: str, raw_value) -> tuple[float | None, str, bool]:
+    """Return (engineering value, unit, needs_calibration)."""
+    try:
+        raw = float(raw_value)
+    except (TypeError, ValueError):
+        return None, "", False
+    dec = DECODERS.get(key)
+    if not dec:
+        return raw, "", False
+    return raw * dec.scale + dec.offset, dec.unit, dec.calibrated
+
+
+# ------------------------------------------------------- parameter classes
+#
+# How fast a signal is *expected* to change decides how to read its
+# timestamp. Mixing these up is what makes a naive age threshold wrong.
+
+
+class ParamClass(str, Enum):
+    CONTINUOUS = "continuous"   # rpm, speed, voltage, temperature
+    COUNTER = "counter"         # odometer, engine hours, total fuel
+    STATE = "state"             # ignition, doors, acc
+    STATIC = "static"           # firmware name, protocol, function id
+    UNKNOWN = "unknown"
+
+
+_CLASS_BY_KEY: dict[str, ParamClass] = {
+    "sensor_12300": ParamClass.CONTINUOUS,
+    "sensor_8200": ParamClass.CONTINUOUS,
+    "sensor_12301": ParamClass.CONTINUOUS,
+    "sensor_8219": ParamClass.CONTINUOUS,
+    "ePwrV": ParamClass.CONTINUOUS,
+    "spd": ParamClass.CONTINUOUS,
+    "sensor_16385": ParamClass.COUNTER,
+    "sensor_16386": ParamClass.COUNTER,
+    "sensor_16387": ParamClass.COUNTER,
+    "acc": ParamClass.STATE,
+    "fw": ParamClass.STATIC,
+    "fw_name": ParamClass.STATIC,
+    "protocol": ParamClass.STATIC,
+    "functionID": ParamClass.STATIC,
+    "fun_id": ParamClass.STATIC,
+}
+
+
+def classify_param(key: str) -> ParamClass:
+    return _CLASS_BY_KEY.get(key, ParamClass.UNKNOWN)
+
+
+# ---------------------------------------------------------------- adapter
+
+@dataclass
+class Parameter:
+    key: str                  # e.g. "sensor_12300"
+    value: object
+    changed_at: int           # unix seconds, when the value last CHANGED
+
+
+@dataclass
+class SensorDefinition:
+    display_name: str         # e.g. "Total fuel"
+    sensor_type: str          # e.g. "Total Fuel Can"
+    parameter_key: str        # e.g. "sensor_16385"
+
+
+class MonitorAdapter(abc.ABC):
+    """Implement these three against the tracking platform."""
+
+    @abc.abstractmethod
+    def find_by_imei(self, imei: str) -> str | None:
+        """Platform-side unit id for an IMEI, or None if unknown."""
+
+    @abc.abstractmethod
+    def parameters(self, unit_id: str) -> tuple[list[Parameter], int]:
+        """All signal params for a unit, plus the unit's last report time."""
+
+    @abc.abstractmethod
+    def sensor_definitions(self, unit_id: str) -> list[SensorDefinition]:
+        """The name-to-parameter mapping configured on the unit."""
+
+
+class NotConfigured(MonitorAdapter):
+    """Placeholder until the tracking platform's API docs arrive."""
+
+    _MSG = (
+        "No monitoring adapter configured. Implement MonitorAdapter with the "
+        "tracking platform's API and pass it to evaluate_device()."
+    )
+
+    def find_by_imei(self, imei): raise NotImplementedError(self._MSG)
+    def parameters(self, unit_id): raise NotImplementedError(self._MSG)
+    def sensor_definitions(self, unit_id): raise NotImplementedError(self._MSG)
+
+
+# ------------------------------------------------------------- verdicts
+
+PROVEN = "proven"        # observed changing across two polls
+LIVE = "live"            # changed while its driver was active -> working
+IDLE = "idle"            # had no reason to change; says nothing either way
+STALLED = "stalled"      # its driver ran for ages and it still did not move
+ABSENT = "absent"        # never appears at all
+
+# Backwards-compatible aliases for the earlier names.
+LIKELY = LIVE
+INCONCLUSIVE = IDLE
+SUSPECT = STALLED
+
+
+class Driver(str, Enum):
+    """What has to be happening for a signal to have any reason to change.
+
+    Judging staleness without this is the trap: a parked truck's odometer
+    is frozen by definition, and calling that suspicious sends a technician
+    to a working install. A signal is only doubtful once the thing that
+    drives it has been running for a long time and it still has not moved.
+    """
+    MOTION = "motion"    # only while the vehicle is actually moving
+    ENGINE = "engine"    # only while the engine is running
+    ALWAYS = "always"    # free-running, e.g. supply voltage, GPS
+    EVENT = "event"      # discrete events only: ignition, doors, loading
+    STATIC = "static"    # firmware names and the like
+
+
+# Sensor types come straight from the platform's own `t` field.
+_DRIVER_BY_TYPE = {
+    "milage": Driver.MOTION,
+    "rpm": Driver.ENGINE,
+    "eng_hour": Driver.ENGINE,
+    "engine_temperature": Driver.ENGINE,
+    "total_fuel_can": Driver.ENGINE,
+    "fuel_level": Driver.ENGINE,
+    "ex_battery_volt": Driver.ALWAYS,
+    "in_battery_volt": Driver.ALWAYS,
+    "weight": Driver.EVENT,
+    "acc": Driver.EVENT,
+}
+
+_DRIVER_BY_KEY = {
+    "spd": Driver.MOTION, "sensor_16387": Driver.MOTION,
+    "sensor_12300": Driver.ENGINE, "sensor_8200": Driver.ENGINE,
+    "sensor_16385": Driver.ENGINE, "sensor_16386": Driver.ENGINE,
+    "sensor_8219": Driver.ENGINE,
+    "ePwrV": Driver.ALWAYS, "sat": Driver.ALWAYS, "hdop": Driver.ALWAYS,
+    "sensor_12292": Driver.ALWAYS,
+    "acc": Driver.EVENT, "sensor_12301": Driver.EVENT,
+    "fw": Driver.STATIC, "fw_name": Driver.STATIC, "protocol": Driver.STATIC,
+    "functionID": Driver.STATIC, "fun_id": Driver.STATIC,
+    "warningID": Driver.STATIC, "war_id": Driver.STATIC,
+}
+
+# How long a driver may run before silence becomes suspicious. Generous:
+# a wrong "stalled" costs the wasted trip this tool exists to prevent.
+# Fuel and volume counters get hours because their resolution is coarse --
+# 0.5 L per step at 1.4 L/h idle is one step every twenty minutes.
+_PATIENCE = {
+    Driver.MOTION: 30 * 60,
+    Driver.ENGINE: 6 * 3600,
+    Driver.ALWAYS: 30 * 60,
+    Driver.EVENT: None,
+    Driver.STATIC: None,
+}
+
+
+@dataclass
+class VehicleState:
+    """Read from lu.unit_state.motion, which carries a state and its cdt."""
+    state: str = ""
+    since: int = 0
+
+    @property
+    def engine_on(self) -> bool:
+        return "engine_on" in self.state
+
+    @property
+    def moving(self) -> bool:
+        return self.state.startswith("moving")
+
+    def enables(self, driver: "Driver") -> bool:
+        if driver is Driver.MOTION:
+            return self.moving
+        if driver is Driver.ENGINE:
+            return self.engine_on
+        if driver is Driver.ALWAYS:
+            return True
+        return False       # EVENT and STATIC are never time-judged
+
+    def describe(self) -> str:
+        return {
+            "moving_engine_on": "moving",
+            "stationary_engine_on": "stopped, engine running",
+            "stationary_engine_off": "parked",
+        }.get(self.state, self.state or "unknown")
+
+
+def driver_for(key: str, sensor_type: str | None = None) -> Driver:
+    if sensor_type and sensor_type in _DRIVER_BY_TYPE:
+        return _DRIVER_BY_TYPE[sensor_type]
+    return _DRIVER_BY_KEY.get(key, Driver.EVENT)
+
+
+@dataclass
+class Reading:
+    key: str
+    display_name: str | None
+    param_class: ParamClass
+    verdict: str
+    raw: object
+    value: float | None
+    unit: str
+    needs_calibration: bool
+    age_seconds: int
+    driver: Driver = Driver.EVENT
+    reason: str = ""            # plain-language why, for the report
+    sensor_type: str = ""       # platform type, the join key to the catalogue
+
+
+# How long a class may sit unchanged before it looks wrong. Generous on
+# purpose: a false "suspect" costs a wasted trip, the same thing this tool
+# exists to prevent.
+_SUSPECT_AFTER = {
+    ParamClass.CONTINUOUS: 6 * 3600,
+    ParamClass.COUNTER: 7 * 86400,
+    ParamClass.STATE: 30 * 86400,
+    ParamClass.STATIC: None,      # never suspect
+    ParamClass.UNKNOWN: 30 * 86400,
+}
+
+_LIKELY_WITHIN = {
+    ParamClass.CONTINUOUS: 600,
+    ParamClass.COUNTER: 3600,
+    ParamClass.STATE: 6 * 3600,
+    ParamClass.STATIC: None,
+    ParamClass.UNKNOWN: 3600,
+}
+
+
+def read_snapshot(
+    params: list[Parameter],
+    last_report: int,
+    definitions: list[SensorDefinition] | None = None,
+    state: VehicleState | None = None,
+) -> list[Reading]:
+    """Judge one snapshot, in the light of what the vehicle was doing.
+
+    Age alone is not evidence. A signal is only doubtful once the thing
+    that drives it has been running long enough that silence cannot be
+    explained, so the window is measured from whichever is later: the
+    parameter's own last change, or the moment the vehicle entered its
+    current state.
+    """
+    names = {d.parameter_key: d.display_name for d in (definitions or [])}
+    types = {d.parameter_key: d.sensor_type for d in (definitions or [])}
+    state = state or VehicleState()
+    out = []
+
+    for p in params:
+        cls = classify_param(p.key)
+        drv = driver_for(p.key, types.get(p.key))
+        age = max(0, int(last_report) - int(p.changed_at))
+
+        # how long the driver has been active without this moving
+        in_state = max(0, int(last_report) - int(state.since)) if state.since else 0
+        silent_while_active = min(age, in_state) if state.enables(drv) else 0
+        patience = _PATIENCE[drv]
+
+        if age <= 300:
+            verdict, reason = LIVE, "updating now"
+        elif not state.enables(drv):
+            verdict = IDLE
+            reason = (f"needs {drv.value}; vehicle is {state.describe()}")
+        elif patience is None:
+            verdict = IDLE
+            reason = ("changes only when something happens"
+                      if drv is Driver.EVENT else "fixed value")
+        elif silent_while_active > patience:
+            verdict = STALLED
+            reason = (f"{drv.value} active {_dur(in_state)} with no change")
+        else:
+            verdict = LIVE if age <= patience else IDLE
+            reason = f"within normal interval for {drv.value}"
+
+        value, unit, calibrated = decode(p.key, p.value)
+        out.append(
+            Reading(
+                key=p.key, display_name=names.get(p.key), param_class=cls,
+                verdict=verdict, raw=p.value, value=value, unit=unit,
+                needs_calibration=calibrated, age_seconds=age,
+                driver=drv, reason=reason,
+                sensor_type=types.get(p.key, ""),
+            )
+        )
+
+    order = {LIVE: 0, IDLE: 1, STALLED: 2}
+    out.sort(key=lambda r: (order.get(r.verdict, 3), r.age_seconds))
+    return out
+
+
+def _dur(seconds: int) -> str:
+    if seconds < 60:
+        return f"{seconds}s"
+    if seconds < 3600:
+        return f"{seconds // 60}m"
+    if seconds < 86400:
+        return f"{seconds // 3600}h"
+    return f"{seconds // 86400}d"
+
+
+def prove_by_diff(before: list[Parameter], after: list[Parameter]) -> dict[str, str]:
+    """The definitive test: poll twice, keep what moved.
+
+    Anything whose value or change-time differs between the two polls is
+    delivering live data, whatever its timestamp looked like in isolation.
+    Take the second poll after the vehicle has been driven, otherwise the
+    counters have nothing to say.
+    """
+    first = {p.key: p for p in before}
+    verdicts: dict[str, str] = {}
+
+    for p in after:
+        prev = first.get(p.key)
+        if prev is None:
+            verdicts[p.key] = LIKELY          # appeared between polls
+        elif str(prev.value) != str(p.value) or prev.changed_at != p.changed_at:
+            verdicts[p.key] = PROVEN
+        else:
+            verdicts[p.key] = INCONCLUSIVE
+
+    for key in first:
+        verdicts.setdefault(key, INCONCLUSIVE)
+    return verdicts
+
+
+@dataclass
+class DeviceEvidence:
+    imei: str
+    unit_id: str | None = None
+    last_report: int = 0
+    readings: list[Reading] = field(default_factory=list)
+    error: str | None = None
+    # parameters frozen at unit setup: declared but never once carrying data
+    never_delivered: set = field(default_factory=set)
+    # param key -> SensorSpec, so values can be rendered the platform's way
+    specs: dict = field(default_factory=dict)
+
+    def by_verdict(self, *wanted: str) -> list[Reading]:
+        return [r for r in self.readings if r.verdict in wanted]
+
+
+def evaluate_device(adapter: MonitorAdapter, imei: str) -> DeviceEvidence:
+    ev = DeviceEvidence(imei=imei)
+    try:
+        unit = adapter.find_by_imei(imei)
+        if not unit:
+            ev.error = "not found on the monitoring platform"
+            return ev
+        ev.unit_id = unit
+        params, last_report = adapter.parameters(unit)
+        ev.last_report = last_report or int(time.time())
+        ev.readings = read_snapshot(params, ev.last_report,
+                                    adapter.sensor_definitions(unit))
+    except NotImplementedError as exc:
+        ev.error = str(exc)
+    except Exception as exc:                      # noqa: BLE001
+        ev.error = f"{type(exc).__name__}: {exc}"
+    return ev
+
+
+def is_named_sensor(reading: "Reading") -> bool:
+    """Is this something a customer would recognise?
+
+    A raw key like sensor_12289 is a wire-level parameter with no sensor
+    configured against it. Reporting those alongside "Engine Hours" buries
+    the answer in noise and implies a precision we do not have -- nobody
+    asked whether sensor_12289 works.
+    """
+    return bool(reading.display_name)
+
+
+def aggregate(evidences: list[DeviceEvidence], named_only: bool = True) -> dict:
+    """Roll several installs of the same CAN file into one verdict per signal.
+
+    Best evidence wins, majority does not. A parked truck contributes no
+    evidence either way -- it must not be allowed to vote a signal down.
+    One device proving a signal proves the file delivers it; twenty parked
+    devices prove nothing at all.
+
+    A signal is only called suspect when it is frozen on every device that
+    had the activity to move it.
+    """
+    usable = [e for e in evidences if not e.error and e.readings]
+    if not usable:
+        return {"devices": 0, "signals": {}}
+
+    tally: dict[str, dict] = {}
+    for ev in usable:
+        for r in ev.readings:
+            if named_only and not is_named_sensor(r):
+                continue
+            name = r.display_name or r.key
+            slot = tally.setdefault(
+                name,
+                {"key": r.key, "class": r.param_class.value, "unit": r.unit,
+                 "needs_calibration": r.needs_calibration,
+                 PROVEN: 0, LIKELY: 0, INCONCLUSIVE: 0, SUSPECT: 0},
+            )
+            slot[r.verdict] = slot.get(r.verdict, 0) + 1
+
+    n = len(usable)
+    signals = {}
+    for name, s in tally.items():
+        positive = s[PROVEN] + s[LIKELY]
+        if positive >= 2:
+            verdict = "supported"
+        elif positive == 1:
+            verdict = "likely supported"
+        elif s[SUSPECT] and not s[INCONCLUSIVE]:
+            verdict = "not delivered"
+        else:
+            verdict = "no evidence yet"
+
+        signals[name] = {
+            "parameter": s["key"], "class": s["class"], "unit": s["unit"],
+            "verdict": verdict, "devices_positive": positive, "of": n,
+            "needs_calibration": s["needs_calibration"],
+        }
+
+    rank = {"supported": 0, "likely supported": 1,
+            "no evidence yet": 2, "not delivered": 3}
+    return {
+        "devices": n,
+        "unreadable": len(evidences) - n,
+        "signals": dict(sorted(signals.items(),
+                               key=lambda kv: (rank[kv[1]["verdict"]], kv[0]))),
+    }
+

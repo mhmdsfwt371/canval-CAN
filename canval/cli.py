@@ -133,8 +133,19 @@ def cmd_index(args, settings):
         active_since_days=args.active_days,
         concurrency=settings.concurrency if settings else 6,
         sample_configs=args.sample_configs,
-        progress=lambda d, t: print(f"  {d}/{t} devices resolved", flush=True),
+        verify_sample=args.verify,
+        limit=args.limit,
+        refresh_after_days=args.refresh_after,
+        force=args.force,
+        progress=lambda d, t: print(f"  {d}/{t} devices read", flush=True),
+        notice=lambda m: print(m, flush=True),
     )
+    if stats.get("verify_mismatches"):
+        print("\n  VERIFICATION FAILED -- the template cache disagreed with "
+              "the devices:")
+        for p_ in stats["verify_problems"]:
+            print(f"    - {p_}")
+        print("  Treat this index as unreliable until that is explained.\n")
     print(json.dumps(stats, indent=2))
 
 
@@ -389,6 +400,18 @@ def main(argv=None):
     pi.add_argument("--hardware", nargs="*", help="hardware id(s) to limit the sweep")
     pi.add_argument("--active-days", type=int, default=60,
                     help="skip devices with no activity in this many days")
+    pi.add_argument("--limit", type=int, default=None, metavar="N",
+                    help="stop after N devices -- for a trial run on one "
+                         "hardware family before committing to the estate")
+    pi.add_argument("--verify", type=int, default=2, metavar="N",
+                    help="re-read N devices per template the slow way and "
+                         "compare, to prove the template cache (0 disables)")
+    pi.add_argument("--refresh-after", type=int, default=7, metavar="DAYS",
+                    help="re-read a device whose last read is older than "
+                         "this, even if its configuration has not changed")
+    pi.add_argument("--force", action="store_true",
+                    help="re-read every device, ignoring when it was last "
+                         "read and whether anything changed")
     pi.add_argument("--sample-configs", type=int, default=0, metavar="N",
                     help="approximate mode: read N devices per config and "
                          "extrapolate a consistent positive result. Off by "

@@ -1,0 +1,287 @@
+"""What the configuration name says about the vehicle.
+
+Installers name configurations after the truck they are fitting:
+
+    (actross mp4 )(110)-Upgraded LX45 V8
+    Stcan-4G-SCANIA-Upgraded (105)
+    VOLVO-FH(+20)(spark) lx45-Upgraded
+
+Nothing reads those names today. They are typed by hand, they are
+inconsistent, and the store module says outright that they are far too
+loose to index on. That judgement is right and this module does not
+overturn it.
+
+What it does instead is treat the name as a *lead*. The device tells us
+which CAN file is loaded; the name tells us what the installer thought
+they were fitting. Where the two disagree, there is something worth a
+human look, and three kinds of disagreement are worth money:
+
+    UPGRADE     the device runs a generic J1939/FMS file, but the name
+                names a make we have a dedicated file for. The generic
+                standard works broadly and reports less; a dedicated file
+                on the same truck usually reports more. Nobody has to
+                visit the vehicle to find out.
+
+    CANDIDATE   the device has a CAN port with nothing assigned, and the
+                name points at a vehicle we have a file for. This is the
+                shortest path from "not fitted" to "fitted" in the whole
+                estate.
+
+    MISMATCH    the device runs a dedicated file for one make while the
+                name says another. Usually a renamed configuration, but
+                occasionally a genuinely wrong install, and those are
+                expensive to find any other way.
+
+EVIDENCE, NOT VERDICTS
+----------------------
+Every row carries the configuration name it was derived from and the word
+that matched. A hint is never written into device_can and never counted
+as an installation: it lives in its own table so that no query answering
+a customer can pick it up by accident. The name may be years out of date
+-- a vehicle can be replaced without anyone editing the text -- so the
+output is a worklist for a person, not an answer for a customer.
+
+WHY THE STOPLIST IS NOT OPTIONAL
+--------------------------------
+The matcher is phonetic, and phonetics do not know what a product name
+is. "stcan" -- the hardware family stamped into half the configuration
+names in this fleet -- sits one edit from "scania" once vowels are
+dropped, so a plain match reads the device model as a truck make and
+invents hundreds of leads out of nothing. Hardware, protocol and feature
+words are therefore removed by name before any matching happens.
+
+    python -m canval.hints              build and show the worklists
+    python -m canval.hints --limit 40   longer lists
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import re
+
+from .fallback import is_generic
+from .matching import fold, similar, skeletons
+from .store import connect
+
+# Words that appear in configuration names and are never a vehicle. Some
+# are here because they are noise; the first group is here because it
+# actively misleads the phonetic matcher.
+STOPWORDS = {
+    # hardware families -- "stcan" is one edit from "scania"
+    "stcan", "xtcan", "lx45", "lx44", "lx43", "lx42", "lx41", "tacho",
+    "light", "castanet", "marimba", "viola", "sitar", "tambourine",
+    "melodeon", "harmonium", "concertina", "khlui", "kontra", "tonette",
+    "harpsichord",
+    # protocol and bus words
+    "can", "can1", "can2", "canbus", "j1939", "fms", "obd", "obd2", "obdii",
+    "generic", "standard", "ack", "kbps",
+    # network and firmware
+    "2g", "3g", "4g", "lte", "roaming", "sim", "apn", "zain", "stc", "mobily",
+    "firmware", "upgraded", "upgrade", "update", "updated", "default",
+    # features and accessories
+    "ibutton", "button", "wiegand", "buzzer", "temp", "hum", "humidity",
+    "spark", "weight", "fuel", "lvl", "level", "lock", "unlock", "relay",
+    "sensor", "sensors", "immobilizer", "rfid", "ble", "bluetooth", "uhf",
+    "gnss", "gps", "tag", "trail", "wireless", "camera", "dvr", "panic",
+    # organisational noise
+    "afaqy", "test", "testing", "demo", "office", "trial", "new", "old",
+    "copy", "final", "backup", "temp1", "hajj", "neqaba", "file", "config",
+    "configuration", "version", "tech", "muti", "multi", "blue", "red",
+    "green", "black", "white",
+}
+
+UPGRADE = "upgrade"
+CANDIDATE = "candidate"
+MISMATCH = "mismatch"
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS config_hints (
+    imei         TEXT NOT NULL,
+    kind         TEXT NOT NULL,      -- upgrade | candidate | mismatch
+    hinted_make  TEXT,
+    hinted_model TEXT,
+    matched_word TEXT,               -- the word in the name that matched
+    evidence     TEXT,               -- the configuration name, verbatim
+    current_file INTEGER,
+    current_name TEXT,
+    built_at     TEXT DEFAULT (datetime('now')),
+    PRIMARY KEY (imei, kind)
+);
+CREATE INDEX IF NOT EXISTS ix_hint_kind ON config_hints(kind);
+CREATE INDEX IF NOT EXISTS ix_hint_make ON config_hints(hinted_make);
+"""
+
+_TOKEN = re.compile(r"[a-z0-9\u0600-\u06FF]+")
+
+
+def catalogue_terms(conn) -> dict:
+    """Make and model words worth recognising, with what they resolve to.
+
+    Only from files that name a real vehicle. A term drawn from a
+    protocol-level entry would match its own generic file and report every
+    truck in the fleet as an upgrade opportunity over itself.
+    """
+    terms: dict[str, dict] = {}
+    for row in conn.execute(
+            """SELECT DISTINCT make, model, name FROM can_files
+                WHERE make IS NOT NULL AND make != ''"""):
+        if is_generic(row["name"]):
+            continue
+        make = row["make"].strip()
+        for word, kind in ((make, "make"), (row["model"] or "", "model")):
+            for token in _TOKEN.findall(fold(word)):
+                if len(token) < 4 or token in STOPWORDS:
+                    continue
+                entry = terms.setdefault(token, {"make": make, "models": set(),
+                                                 "kind": kind})
+                if row["model"]:
+                    entry["models"].add(row["model"].strip())
+    return terms
+
+
+def hint_from_config(config_name: str, terms: dict):
+    """(make, model, matched word) the name points at, or None.
+
+    Exact token match first, phonetic second, longest word wins. Longest
+    because "actross mp4" should resolve on "actross" and not on some
+    three-letter coincidence elsewhere in the string.
+    """
+    if not config_name:
+        return None
+    words = sorted({w for w in _TOKEN.findall(fold(config_name))
+                    if len(w) >= 4 and w not in STOPWORDS},
+                   key=len, reverse=True)
+    for word in words:
+        if word in terms:
+            hit = terms[word]
+            return hit["make"], (sorted(hit["models"])[0]
+                                 if len(hit["models"]) == 1 else None), word
+    for word in words:
+        skel = skeletons(word)
+        if not skel:
+            continue
+        for term, hit in terms.items():
+            if similar(word, term):
+                return hit["make"], (sorted(hit["models"])[0]
+                                     if len(hit["models"]) == 1 else None), word
+    return None
+
+
+def build_hints(conn) -> dict:
+    """Compare every device's loaded file against what its name suggests."""
+    conn.executescript(SCHEMA)
+    conn.execute("DELETE FROM config_hints")
+
+    terms = catalogue_terms(conn)
+    stats = {"catalogue_terms": len(terms), "devices_examined": 0,
+             "named": 0, UPGRADE: 0, CANDIDATE: 0, MISMATCH: 0}
+
+    rows = conn.execute(
+        """SELECT d.imei, d.config_name, d.file_id, d.element_name,
+                  f.name AS file_name, f.make AS file_make
+             FROM device_can d
+             LEFT JOIN can_files f ON f.file_id = d.file_id
+            GROUP BY d.imei""").fetchall()
+
+    # One lookup per distinct configuration name, not per device: 25000
+    # devices share a few thousand names, and the phonetic pass is the
+    # expensive part.
+    resolved: dict = {}
+    for row in rows:
+        stats["devices_examined"] += 1
+        config = row["config_name"]
+        if not config:
+            continue
+        if config not in resolved:
+            resolved[config] = hint_from_config(config, terms)
+        hint = resolved[config]
+        if not hint:
+            continue
+        make, model, word = hint
+        stats["named"] += 1
+
+        assigned = row["file_id"] is not None
+        generic = assigned and is_generic(row["file_name"] or "")
+
+        if not assigned:
+            # Only somewhere a file could actually go.
+            if row["element_name"] and "no CAN ports" in row["element_name"]:
+                continue
+            kind = CANDIDATE
+        elif generic:
+            kind = UPGRADE
+        elif (row["file_make"] or "").strip().upper() != make.upper():
+            kind = MISMATCH
+        else:
+            continue
+
+        stats[kind] += 1
+        conn.execute(
+            """INSERT INTO config_hints
+               (imei, kind, hinted_make, hinted_model, matched_word,
+                evidence, current_file, current_name, built_at)
+               VALUES (?,?,?,?,?,?,?,?, datetime('now'))
+               ON CONFLICT(imei, kind) DO UPDATE SET
+                 hinted_make=excluded.hinted_make,
+                 hinted_model=excluded.hinted_model,
+                 matched_word=excluded.matched_word,
+                 evidence=excluded.evidence,
+                 current_file=excluded.current_file,
+                 current_name=excluded.current_name,
+                 built_at=datetime('now')""",
+            (row["imei"], kind, make, model, word, config,
+             row["file_id"], row["file_name"]))
+    return stats
+
+
+def report(conn, limit: int = 15) -> None:
+    titles = {
+        UPGRADE: ("ON A GENERIC FILE, NAMED AS SOMETHING WE COVER",
+                  "a dedicated file usually reports more signals"),
+        CANDIDATE: ("NO FILE ASSIGNED, NAMED AS SOMETHING WE COVER",
+                    "fittable from the desk, no visit needed to decide"),
+        MISMATCH: ("RUNNING A FILE FOR A DIFFERENT MAKE THAN THE NAME SAYS",
+                   "usually a stale name, occasionally a wrong install"),
+    }
+    for kind in (CANDIDATE, UPGRADE, MISMATCH):
+        title, why = titles[kind]
+        total = conn.execute("SELECT COUNT(*) c FROM config_hints WHERE kind=?",
+                             (kind,)).fetchone()["c"]
+        print(f"\n{title}  ({total} devices)")
+        print(f"  {why}\n")
+        for row in conn.execute(
+                """SELECT hinted_make, COUNT(*) n,
+                          MIN(evidence) sample, MIN(matched_word) word,
+                          MIN(current_name) now_on
+                     FROM config_hints WHERE kind=?
+                    GROUP BY hinted_make ORDER BY n DESC LIMIT ?""",
+                (kind, limit)):
+            on = f"  now on {row['now_on']}" if row["now_on"] else ""
+            print(f"  {row['n']:>6}  {row['hinted_make']:<16}"
+                  f" matched {row['word']!r}{on}")
+            print(f"          e.g. {row['sample']}")
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(prog="canval.hints", description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--limit", type=int, default=15,
+                        help="makes to list per section")
+    parser.add_argument("--db", default=os.environ.get("CANVAL_DB", "canval.db"))
+    args = parser.parse_args(argv)
+
+    with connect(args.db) as conn:
+        stats = build_hints(conn)
+        print(f"\n  catalogue terms      {stats['catalogue_terms']}")
+        print(f"  devices examined     {stats['devices_examined']}")
+        print(f"  names naming a make  {stats['named']}")
+        report(conn, args.limit)
+        print("\n  These are leads read from text typed by installers, not "
+              "facts read from devices.\n  Nothing here is counted as an "
+              "installation anywhere else in the tool.\n")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

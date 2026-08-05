@@ -1,0 +1,85 @@
+# Nightly refresh, run by GitHub rather than by anyone's laptop.
+#
+# The secrets live in the repository's own secret store, so the XDM
+# credentials never sit in a file, never appear in a log, and never need a
+# machine at home to stay switched on. The job talks to XDM, rebuilds the
+# index, exports the JSON the site reads, and commits it.
+#
+# The database is cached between runs instead of committed. It is a binary
+# that changes every night, and committing it would grow the repository
+# forever for a file nobody reads. If the cache is ever missing the job
+# simply rebuilds it from scratch -- slower, and correct.
+#
+# Set these once under Settings -> Secrets and variables -> Actions:
+#     XDM_CLIENT_ID        external_afaqy_client
+#     XDM_CLIENT_SECRET    the rotated secret
+#     XDM_DOMAIN           eu
+
+name: canval nightly
+
+on:
+  schedule:
+    - cron: "0 1 * * *"      # 01:00 UTC = 04:00 in Jeddah
+  workflow_dispatch:          # and whenever you press the button
+
+permissions:
+  contents: write
+
+concurrency:
+  group: canval-sync
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    env:
+      XDM_CLIENT_ID: ${{ secrets.XDM_CLIENT_ID }}
+      XDM_CLIENT_SECRET: ${{ secrets.XDM_CLIENT_SECRET }}
+      XDM_DOMAIN: ${{ secrets.XDM_DOMAIN }}
+      CANVAL_DB: ${{ github.workspace }}/canval.db
+      PYTHONIOENCODING: utf-8
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      # A dated key with a plain prefix as fallback: today's cache if the
+      # job already ran today, otherwise the most recent one there is.
+      - name: Restore the index
+        uses: actions/cache@v4
+        with:
+          path: canval.db
+          key: canval-db-${{ github.run_id }}
+          restore-keys: canval-db-
+
+      - name: Refresh the catalogue and sweep the devices
+        run: |
+          python -m canval.cli sync \
+            --hardware 3 4 12 15 16 89 98 \
+            --active-days 0
+
+      - name: Read the configuration names for leads
+        run: python -m canval.hints --limit 25
+
+      - name: Export the site data
+        run: python -m canval.export_site --out docs/data
+
+      - name: Publish
+        run: |
+          git config user.name  "canval"
+          git config user.email "canval@users.noreply.github.com"
+          git add docs/data
+          if git diff --staged --quiet; then
+            echo "Nothing changed since the last run."
+          else
+            git commit -m "data: refresh $(date -u '+%Y-%m-%d %H:%M UTC')"
+            git push
+          fi
