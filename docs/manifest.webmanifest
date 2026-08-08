@@ -1,0 +1,18 @@
+{
+  "name": "canval — دعم الكان",
+  "short_name": "canval",
+  "description": "هل العربية دي مدعومة؟ إجابة من كتالوج ملفات الكان ومن الأجهزة المركّبة فعلًا في الأسطول.",
+  "id": "/canval-CAN/",
+  "start_url": "/canval-CAN/",
+  "scope": "/canval-CAN/",
+  "display": "standalone",
+  "dir": "rtl",
+  "lang": "ar",
+  "background_color": "#15191B",
+  "theme_color": "#101619",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -14,6 +14,16 @@
 <meta property="og:image" content="preview.svg">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#101619">
+<!-- Installable: the manifest is what lets Android and Windows offer
+     "install app", and the PNG is for iOS, which ignores both the
+     manifest icons and any SVG. No service worker on purpose -- the data
+     is nightly and the network is always there, so a cache would only add
+     a stale copy to explain. -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="canval">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23101619'/%3E%3Cg fill='none' stroke-width='5' stroke-linecap='round'%3E%3Cpath d='M8 22c8 0 8 20 16 20s8-20 16-20 8 20 16 20' stroke='%23E0A106'/%3E%3Cpath d='M8 42c8 0 8-20 16-20s8 20 16 20 8-20 16-20' stroke='%2312734A'/%3E%3C/g%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -40,6 +50,11 @@ html[data-theme="dark"]{
   --soft:#222829; --chip:#1E2E27; --chipT:#7FCBA4; --chipL:#2C4438;
   --chipN:#33221F; --chipNT:#E39184; --chipNL:#4A2E29; --sel:#262D30;
 }
+/* Three sizes, cycled from one button. zoom scales everything at once --
+   text, fields, touch targets -- which is exactly what seventy-year-old
+   eyes and fingers need, with no second layout to maintain. */
+html[data-zoom="1"]{zoom:1.15}
+html[data-zoom="2"]{zoom:1.32}
 html{color-scheme:light}
 html[data-theme="dark"]{color-scheme:dark}
 *{box-sizing:border-box}
@@ -133,6 +148,16 @@ body{background:var(--paper);color:var(--ink);font-family:var(--sans);
 .verdict .nums b{color:var(--ink);font-size:16px;font-weight:600}
 .verdict p{margin:8px 0 0;font-size:14px;color:var(--muted)}
 .verdict .live{margin-top:10px;display:flex;gap:6px;flex-wrap:wrap}
+/* The sentence a salesperson can repeat verbatim, set apart from the
+   analysis so it can be found without reading any of it. */
+.say{margin-top:11px;padding:9px 12px;background:var(--soft);
+  border:1px dashed var(--line);border-radius:2px;font-size:14.5px}
+.say span{display:block;font-family:var(--mono);font-size:10.5px;
+  color:var(--muted);letter-spacing:.05em;margin-bottom:3px}
+.shr{margin-top:10px;font-family:var(--sans);font-size:14px;font-weight:600;
+  padding:9px 16px;border:1.5px solid var(--canl);background:none;
+  color:var(--canl);border-radius:2px;cursor:pointer}
+.shr:hover{background:var(--canl);color:var(--panel)}
 
 /* ---------------- the list ---------------- */
 h3.sec{font-size:14px;font-weight:600;margin:24px 0 8px;color:var(--muted)}
@@ -293,6 +318,7 @@ footer{border-top:1px solid var(--line);padding:16px 0 40px;font-size:13px;
   <div class="gauges" id="gauges"></div>
   <div class="tools">
     <button class="tool" id="help" type="button" data-t="guideBtn"></button>
+    <button class="tool" id="zoom" type="button" title="كبّر الخط">A+</button>
     <button class="tool" id="lang" type="button">EN</button>
     <button class="tool" id="theme" type="button" aria-label="theme">
       <svg width="15" height="15" viewBox="0 0 20 20" fill="none"
@@ -378,7 +404,7 @@ const esc = s => (s ?? "").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;")
    the page may be Arabic, and only an isolate keeps them whole. */
 const bdi = s => `<bdi dir="${/[\u0600-\u06FF]/.test(s ?? "") ? "rtl" : "ltr"}">${esc(s)}</bdi>`;
 const THIS_YEAR = new Date().getFullYear();
-const VERSION = "1.5";
+const VERSION = "1.8";
 const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"ar"};
 
 /* What changed, and when. Kept beside the code rather than in a document
@@ -387,6 +413,32 @@ const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"a
    about. Newest first. The rule that goes with it: a new version adds,
    it does not quietly change what already worked. */
 const CHANGES = [
+  {v:"1.8", d:"2026-08-08", items:[
+    ["زرار A+ بيكبّر الصفحة كلها على تلات درجات ومحفوظ بين الزيارات — معمول لعين كبيرة في السن.",
+     "An A+ button scales the whole page through three sizes and remembers the choice \u2014 built for older eyes."],
+    ["زرار «شارك النتيجة» تحت الحكم: النوع والحكم والجملة الجاهزة واللينك في رسالة واحدة.",
+     "A \u201cShare the result\u201d button under the verdict: vehicle, verdict, the ready sentence and the link in one message."],
+    ["الصفحة بتقول «بنحمّل البيانات» بدل ما تبان فاضية على النت البطيء.",
+     "The page says it is loading instead of sitting blank on a slow connection."],
+    ["وللمشغّلين: اختبارات تلقائية بتشتغل مع كل رفع على GitHub، ودليل تشغيل OPERATIONS.md جوه المستودع.",
+     "For operators: automated tests now run on every push, and an OPERATIONS.md runbook lives in the repository."],
+  ]},
+  {v:"1.7", d:"2026-08-08", items:[
+    ["الصفحة بقت تتثبت كتطبيق: أندرويد وويندوز بيعرضوا «تثبيت» لوحدهم، وعلى الآيفون من سفاري: مشاركة ثم «إضافة إلى الشاشة الرئيسية». بتفتح ملء الشاشة بأيقونة السلكين.",
+     "The page now installs as an app: Android and Windows offer \u201cinstall\u201d on their own, and on iPhone it is Safari\u2019s share button then \u201cAdd to Home Screen\u201d. It opens full-screen under the twisted-pair icon."],
+    ["التطبيق محتاج نت — البيانات بتتقري لحظتها ومفيش نسخة مخزّنة، بقرار متعمّد عشان محدش يقرا أرقام قديمة.",
+     "The app needs a connection \u2014 data is read live and nothing is cached, deliberately, so nobody ever reads stale numbers."],
+  ]},
+  {v:"1.6", d:"2026-08-06", items:[
+    ["جوّه الحكم بقى فيه سطر «اللي تقوله للعميل» — جملة جاهزة تتقال زي ما هي، بتتغير مع كل حالة.",
+     "The verdict now carries a \u201cwhat to tell the customer\u201d line \u2014 a sentence ready to repeat as-is, changing with each case."],
+    ["الكروت العشرة بتتنحّى لما توصل لنتيجة من القوايم أو من الكتابة، وبترجع مع «رجوع» أو «مسح». لو فاتح من كارت بتفضل ظاهرة عشان الدوسة التانية تقفل.",
+     "The ten cards step aside once an answer arrives through the pickers or the free-text field, and come back with Back or Clear. Opened from a card they stay, so a second tap can close."],
+    ["رقم العيّنة بقى صريح: «6 / 6 من العيّنة بيبعتوا» بدل رقم لوحده كان بيتقري غلط جنب عدد الأجهزة الكلي.",
+     "The sample is now spelled out: \u201c6 / 6 of the sample sending\u201d instead of a bare number that read wrongly beside the total device count."],
+    ["خانة النشاط بتطلع «—» لما بيانات النشاط مش موجودة في المسح أصلًا، بدل صفر كان بيتّهم أجهزة شغّالة بالسكوت.",
+     "The activity cell shows a dash when the sweep carries no activity data at all, instead of a zero that called working devices dead."],
+  ]},
   {v:"1.5", d:"2026-08-05", items:[
     ["الكارت بيتقفل لما تدوس عليه تاني، وبيفضل متحدد بالأخضر طول ما نتيجته على الشاشة. في 1.3 التحديد ده اتكتب وما اتحفظش، فالكارت كان بيفتح من غير ما يبان إنه مفتوح.",
      "A card closes when tapped a second time, and stays marked green for as long as its answer is on screen. In 1.3 that highlight was written but never saved, so a card would open without showing that it had."],
@@ -522,6 +574,22 @@ const STR = {
   cardsLead:  ["دوس على أي واحدة تشوف بتدعم قرايات إيه.",
                "Tap any one to see what it actually supports."],
   back:       ["رجوع", "Back"],
+  say:        ["اللي تقوله للعميل", "What to tell the customer"],
+  sayOk:      ["مدعومة ومجرّبة في أسطولنا — بنقرا منها {s} وغيرهم.",
+               "Supported and proven in our own fleet — we read {s} and more from it."],
+  sayPend:    ["مدعومة والتركيبات شغّالة، وبنأكد قايمة الإشارات النهائية خلال يوم أو يومين.",
+               "Supported and installed; the final signal list is confirmed within a day or two."],
+  sayQuiet:   ["فيه تركيبات بس ساكتة من شهر — راجع R&D قبل أي وعد.",
+               "There are installs but they have been silent for a month — check with R&D before promising."],
+  sayDead:    ["متقولش مدعومة لسه — فيه عطل معروف بنراجعه مع R&D.",
+               "Do not say supported yet — there is a known fault under review with R&D."],
+  sayNever:   ["قول: نقدر ندعمها بعد تجربة ميدانية قصيرة — الملف جاهز عندنا.",
+               "Say: we can support it after a short field test — the file is ready on our side."],
+  nSampled:   ["من العيّنة بيبعتوا", "of the sample sending"],
+  loading:    ["ثواني — بنحمّل البيانات...", "One moment \u2014 loading the data..."],
+  share:      ["شارك النتيجة", "Share the result"],
+  copied:     ["اتنسخت — الزقها في واتساب أو إيميل", "Copied \u2014 paste it anywhere"],
+  zoomTip:    ["كبّر الخط", "Text size"],
   cardOpen:   ["دوس تاني تقفلها", "Tap again to close"],
   generic:    ["بروتوكول عام", "generic protocol"],
   anyYear:    ["كل السنوات", "any year"],
@@ -655,6 +723,9 @@ function combo(id, opts){
 
 /* ------------------------------------------------------------- load */
 async function load(){
+  /* An empty page and a loading page are different promises. On a slow
+     connection the difference is whether somebody waits or gives up. */
+  $("out").innerHTML = `<div class="verdict"><h2>${T("loading")}</h2></div>`;
   try{
     const [v,cfg,fleet,meta] = await Promise.all(
       ["vehicles","configs","fleet","meta"].map(n =>
@@ -662,6 +733,7 @@ async function load(){
           if(!r.ok) throw new Error(n); return r.json(); })));
     Object.assign(state,{v,cfg,fleet,meta});
     for(const x of state.cfg) x._h = fold(x.nm);
+    $("out").innerHTML = "";
     buildMakes(); paint();
   }catch(e){
     $("out").innerHTML = `<div class="verdict bad"><h2>${T("dataMiss")}</h2>
@@ -699,6 +771,11 @@ function yearsOf(files){
     .concat([...y].sort((a,b) => b-a).map(v => ({value:String(v), label:String(v)})));
 }
 const coverYear = (f,y) => !y || !f.y0 || (y >= f.y0 && y <= (f.y1 || THIS_YEAR));
+/* Whether this export carries activity data at all. When the sweep runs
+   without it, every file reads zero -- and a page that prints "0 active"
+   over a fleet it just proved is sending would be calling healthy
+   devices dead. Unknown gets a dash, and no verdict leans on it. */
+const actKnown = () => state.v.some(f => (f.a || 0) > 0);
 
 /* -------------------------------------------------------- rendering */
 function pairSvg(bus){
@@ -752,7 +829,7 @@ function fileRow(f){
     <div class="nm"><div class="t">${bdi(f.n)}</div>
       <div class="d">${esc(bits)}</div>${live}</div>
     ${num(f.f, T("devices"))}
-    ${num(f.a, T("nActive"))}
+    ${num(actKnown() ? (f.a || 0) : "\u2014", T("nActive"))}
     ${num(f.c, T("nConfigs"))}
     <button class="sx" data-sx="${f.i}">${(f.s||[]).length} ${T("nSig")}</button>
   </div>`;
@@ -796,18 +873,20 @@ function verdict(files, year){
   }
   if(lv.reporting)
     return {cls:"ok", h:T("vOk"), inYear, lv, p:null,
-      nums:[[fitted,T("nFitted")],[lv.reporting,T("nReporting")],
+      say:T("sayOk", {s: lv.signals.slice(0,3).join(state.lang === "ar" ? "\u060c " : ", ")}),
+      nums:[[fitted,T("nFitted")],[`${lv.reporting} / ${lv.saw}`,T("nSampled")],
             [lv.signals.length,T("nSignals")]]};
   if(fitted && lv.saw)
-    return {cls:"bad", h:T("vDead"), inYear, lv, p:T("vDeadP"),
+    return {cls:"bad", h:T("vDead"), inYear, lv, p:T("vDeadP"), say:T("sayDead"),
       nums:[[fitted,T("nFitted")],[lv.saw,T("nChecked")],[cfgs,T("nConfigs")]]};
-  if(fitted && active)
-    return {cls:"warn", h:T("vPend"), inYear, lv, p:T("vPendP"),
+  if(fitted && (active || !actKnown()))
+    return {cls:"warn", h:T("vPend"), inYear, lv, p:T("vPendP"), say:T("sayPend"),
       nums:[[fitted,T("nFitted")],[active,T("nActive")],[cfgs,T("nConfigs")]]};
   if(fitted)
-    return {cls:"warn", h:T("vQuiet"), inYear, lv, p:T("vQuietP"),
+    return {cls:"warn", h:T("vQuiet"), inYear, lv, p:T("vQuietP"), say:T("sayQuiet"),
       nums:[[fitted,T("nFitted")],[cfgs,T("nConfigs")]]};
-  return {cls:"bad", h:T("vNever"), nums:null, p:T("vNeverP"), inYear, lv};
+  return {cls:"bad", h:T("vNever"), nums:null, p:T("vNeverP"), say:T("sayNever"),
+          inYear, lv};
 }
 
 /* A file with no end year covers every year after its start, so asking
@@ -837,6 +916,10 @@ function renderPick(){
   if(v.nums) html += `<div class="nums">${v.nums
     .map(([n,l]) => `<span><b>${n}</b> ${esc(l)}</span>`).join("")}</div>`;
   if(v.p) html += `<p>${esc(v.p)}</p>`;
+  if(v.say) html += `<div class="say"><span>${T("say")}</span>${esc(v.say)}</div>`;
+  state.shareText = `canval \u2014 ${mk} ${md}${yr ? " " + yr : ""}\n${v.h}${
+    v.say ? "\n" + v.say : ""}\n${location.href}`;
+  html += `<button class="shr" id="shr">${T("share")}</button>`;
   if(v.lv.signals.length)
     html += `<div class="live">${v.lv.signals
       .map(s => `<span class="s">${bdi(s)}</span>`).join("")}</div>
@@ -854,6 +937,7 @@ function renderPick(){
       <div class="note">${esc(T("widerNote",{y:yr}))}</div>`;
   if(!v.inYear.some(f => f.f)) html += genericBlock(mk+" "+md);
   $("out").innerHTML = html;
+  syncCards();
 }
 
 function genericBlock(query){
@@ -874,13 +958,14 @@ function genericBlock(query){
 function renderFree(){
   const q = $("free").value.trim();
   state.free = q;
-  if(!q){ $("out").innerHTML = ""; return; }
+  if(!q){ $("out").innerHTML = ""; syncCards(); return; }
   state.pick = null;
   ["mk","md","yr"].forEach(id => { $(id).value = ""; });
   $("md").disabled = $("yr").disabled = true;
   $("out").innerHTML = `<div class="verdict bad">
     <h2>${T("freeHead",{q:esc(q)})}</h2><p>${esc(T("freeP"))}</p></div>`
     + genericBlock(q);
+  syncCards();
 }
 
 /* A shortcut for the question people ask most: what is already out there
@@ -901,6 +986,7 @@ function cards(){
         <span class="cd"><b>${c.devices.toLocaleString("en")}</b> ${T("devices")}</span>
       </button>`).join("")}</div>`;
 }
+function paintShare(b){ b.textContent = T("share"); }
 $("cards").addEventListener("click", e => {
   const btn = e.target.closest(".card");
   if(!btn) return;
@@ -930,6 +1016,17 @@ $("cards").addEventListener("click", e => {
   }
   $("out").scrollIntoView({behavior:"smooth", block:"start"});
 });
+
+/* The ten cards are a front door, and a front door has no business
+   standing between a person and the room they are already in. Reached
+   through the pickers or the free-text field, the answer takes the cards'
+   place; Back or Clear brings them back. Opened FROM a card they stay,
+   because the marked card is how a second tap closes it. */
+function syncCards(){
+  if(!state.fleet) return;
+  $("cards").hidden = !!(state.pick || state.free)
+    && (state.cardOn === null || state.cardOn === undefined);
+}
 
 /* ----------------------------------------------------------- panels */
 function panels(){
@@ -991,7 +1088,7 @@ function paint(){
   $("md").placeholder = $("md").disabled ? T("dash") : T("pickAny");
   $("yr").placeholder = $("yr").disabled ? T("dash") : T("allYears");
   $("free").placeholder = T("missPh");
-  if(state.meta){ panels(); cards(); }
+  if(state.meta){ panels(); cards(); syncCards(); }
   if(state.free) renderFree(); else renderPick();
 }
 
@@ -1026,6 +1123,7 @@ function clearAll(focus){
   $("md").disabled = $("yr").disabled = true;
   $("md").placeholder = $("yr").placeholder = T("dash");
   $("out").innerHTML = "";
+  syncCards();
   if(focus) $("mk").focus();
 }
 $("reset").addEventListener("click", () => clearAll(true));
@@ -1067,6 +1165,16 @@ function detail(f){
   return html + `</div>`;
 }
 $("out").addEventListener("click", e => {
+  if(e.target.closest("#shr")){
+    const t = state.shareText || "";
+    if(navigator.share){ navigator.share({text: t}).catch(() => {}); }
+    else if(navigator.clipboard){
+      navigator.clipboard.writeText(t);
+      const b = document.getElementById("shr");
+      if(b){ b.textContent = T("copied"); setTimeout(() => paintShare(b), 2600); }
+    }
+    return;
+  }
   if(e.target.closest("#back")){
     clearAll();
     $("cards").scrollIntoView({behavior:"smooth", block:"start"});
@@ -1106,6 +1214,10 @@ const GUIDE = {
        "Pick the make, then the model, then the year. Every list comes from the catalogue itself, so a vehicle missing from it has no dedicated file."],
       ["تقدر تكتب جوه أي قايمة عشان تفلترها بدل ما تنزل بالعجلة.",
        "You can type inside any list to filter it instead of scrolling."],
+      ["زرار A+ فوق بيكبّر الخط والزراير كلها على تلات درجات — للي نظره تعبان أو الشاشة صغيرة.",
+       "The A+ button above enlarges text and buttons through three sizes \u2014 for tired eyes or small screens."],
+      ["تحت الحكم زرار «شارك النتيجة»: على الموبايل بيفتح واتساب مباشرة، وعلى الكمبيوتر بينسخ النص جاهز للزق.",
+       "Below the verdict, \u201cShare the result\u201d opens the phone\u2019s share sheet straight into WhatsApp, or copies the text ready to paste on a computer."],
       ["لو العربية مش في القوايم أصلًا، اكتب اسمها في الخانة اللي تحت وهي هتوريك البروتوكول العام وإذا كان حد جرّبه على نفس النوع قبل كده.",
        "If the vehicle is not in the lists at all, type its name in the field below and the page will show the generic protocol and whether anyone has already run that vehicle on it."],
     ]},
@@ -1128,6 +1240,8 @@ const GUIDE = {
        "Configurations: how many different configurations assign this file."],
       ["إشارة واصلة: عدد الحساسات اللي المنصة قرأتها فعلًا من الأجهزة اللي اتفحصت.",
        "Signals arriving: how many sensors the platform actually read from the sampled devices."],
+      ["«—» في خانة النشاط معناها إن بيانات النشاط مش متوفرة في المسح ده، مش إن الأجهزة واقفة.",
+       "A dash in the activity cell means activity data is unavailable in this sweep, not that the devices are idle."],
     ]},
     {h:["التحقق بنفسك","Checking it yourself"], b:[
       ["دوس على زرار الإشارات في أي سطر. هيفتحلك حاجتين: اللي الكتالوج واعد بيه، وتحته آخر ٣ أجهزة محدّثة بالمعرّف والقيم الواصلة منهم.",
@@ -1241,6 +1355,17 @@ document.addEventListener("keydown", e => {
 const save = (k,v) => { try{ localStorage.setItem("canval."+k, v); }catch(e){} };
 const read = k => { try{ return localStorage.getItem("canval."+k); }catch(e){ return null; } };
 
+function setZoom(z){
+  if(z) document.documentElement.dataset.zoom = z;
+  else delete document.documentElement.dataset.zoom;
+  $("zoom").textContent = z === "2" ? "A++" : z === "1" ? "A+" : "A";
+  save("zoom", z || "");
+}
+$("zoom").addEventListener("click", () => {
+  const cur = document.documentElement.dataset.zoom || "";
+  setZoom(cur === "" ? "1" : cur === "1" ? "2" : "");
+});
+
 function setTheme(mode){
   document.documentElement.dataset.theme = mode;
   $("th-moon").hidden = mode === "dark";
@@ -1256,6 +1381,7 @@ $("lang").addEventListener("click", () => {
 });
 
 state.lang = read("lang") || "ar";
+setZoom(read("zoom") || "");
 setTheme(read("theme") ||
   (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
 paint();

@@ -1,0 +1,4 @@
+canval.db
+*.bak
+__pycache__/
+*.pyc
