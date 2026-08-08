@@ -152,6 +152,11 @@ body{background:var(--paper);color:var(--ink);font-family:var(--sans);
    analysis so it can be found without reading any of it. */
 .say{margin-top:11px;padding:9px 12px;background:var(--soft);
   border:1px dashed var(--line);border-radius:2px;font-size:14.5px}
+.dtog{font-family:var(--mono);font-size:11px;color:var(--muted);
+  background:none;border:none;border-bottom:1px dotted var(--line);
+  padding:0 0 2px;cursor:pointer;margin-bottom:8px}
+.dtog:hover{color:var(--ink)}
+.decl .why{font-size:11.5px;color:var(--muted);margin-bottom:6px}
 .say span{display:block;font-family:var(--mono);font-size:10.5px;
   color:var(--muted);letter-spacing:.05em;margin-bottom:3px}
 .shr{margin-top:10px;font-family:var(--sans);font-size:14px;font-weight:600;
@@ -404,7 +409,7 @@ const esc = s => (s ?? "").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;")
    the page may be Arabic, and only an isolate keeps them whole. */
 const bdi = s => `<bdi dir="${/[\u0600-\u06FF]/.test(s ?? "") ? "rtl" : "ltr"}">${esc(s)}</bdi>`;
 const THIS_YEAR = new Date().getFullYear();
-const VERSION = "1.8";
+const VERSION = "1.9";
 const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"ar"};
 
 /* What changed, and when. Kept beside the code rather than in a document
@@ -413,6 +418,10 @@ const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"a
    about. Newest first. The rule that goes with it: a new version adds,
    it does not quietly change what already worked. */
 const CHANGES = [
+  {v:"1.9", d:"2026-08-08", items:[
+    ["قايمة «الإشارات المعلنة في الكتالوج» بقت تظهر بس في الحالات اللي مفيش فيها جهاز مركّب بيقرا. طالما فيه تركيب شغّال، هو الإثبات والوعد بيتطوي ورا سطر صغير للاطلاع.",
+     "The catalogue signal list now appears only where no fitted device is reading. Where an installation is working, that is the proof, and the promise folds behind one small line."],
+  ]},
   {v:"1.8", d:"2026-08-08", items:[
     ["زرار A+ بيكبّر الصفحة كلها على تلات درجات ومحفوظ بين الزيارات — معمول لعين كبيرة في السن.",
      "An A+ button scales the whole page through three sizes and remembers the choice \u2014 built for older eyes."],
@@ -598,6 +607,10 @@ const STR = {
   devNote:    ["افتح أي معرّف على البرو وقارن بنفسك. القيم دي خام زي ما وصلت من الجهاز.",
                "Open any of these on the platform and check for yourself. Values are raw, as they arrived."],
   declared:   ["الإشارات المعلنة في الكتالوج", "Signals the catalogue declares"],
+  declShow:   ["وعد الكتالوج ({n} إشارة) — للاطلاع", "What the catalogue promises ({n}) \u2014 if you need it"],
+  declHide:   ["إخفاء وعد الكتالوج", "Hide the catalogue promise"],
+  declWhy:    ["الجهاز المركّب أثبت الدعم فعلًا، فالوعد ده مجرد مرجع.",
+               "An installed device has already proven support, so this is reference only."],
   noDevices:  ["مفيش أجهزة اتفحصت على الملف ده لسه.",
                "No devices have been checked on this file yet."],
   silent:     ["ساكت", "silent"],
@@ -1137,9 +1150,20 @@ $("free").addEventListener("input", () => {
 function detail(f){
   const chips = (f.s||[]).map(s => `<span class="s">${bdi(s)}</span>`).join("")
     + (f.x||[]).map(s => `<span class="s no">${bdi(s)}</span>`).join("");
-  let html = `<div class="sensors">
-    <div class="dh">${T("declared")}</div>
+  /* Once a fitted device is sending, the catalogue's promise stops being
+     evidence and starts being noise: two long lists of signal names where
+     only one of them is a fact. So the promise folds away wherever the
+     installation already answered the question, and stays open wherever
+     it is the only thing we have. */
+  const proven = !!(f.lv && f.lv.r);
+  const nDecl = (f.s||[]).length + (f.x||[]).length;
+  const declBlock = `<div class="dh">${T("declared")}</div>
     <div class="chips">${chips || `<span class="s no">${T("noSig")}</span>`}</div>`;
+  let html = `<div class="sensors">`;
+  html += proven
+    ? `<button class="dtog" data-dtog="${f.i}">${T("declShow", {n:nDecl})}</button>
+       <div class="decl" hidden><div class="why">${T("declWhy")}</div>${declBlock}</div>`
+    : declBlock;
 
   const devs = (f.lv && f.lv.d) || [];
   html += `<div class="dh">${T("devHead")}</div>`;
@@ -1178,6 +1202,15 @@ $("out").addEventListener("click", e => {
   if(e.target.closest("#back")){
     clearAll();
     $("cards").scrollIntoView({behavior:"smooth", block:"start"});
+    return;
+  }
+  const tog = e.target.closest(".dtog");
+  if(tog){
+    const box = tog.parentElement.querySelector(".decl");
+    box.hidden = !box.hidden;
+    tog.textContent = box.hidden
+      ? T("declShow", {n: box.querySelectorAll(".chips .s").length})
+      : T("declHide");
     return;
   }
   const btn = e.target.closest(".sx");
@@ -1240,6 +1273,8 @@ const GUIDE = {
        "Configurations: how many different configurations assign this file."],
       ["إشارة واصلة: عدد الحساسات اللي المنصة قرأتها فعلًا من الأجهزة اللي اتفحصت.",
        "Signals arriving: how many sensors the platform actually read from the sampled devices."],
+      ["لما يكون فيه جهاز مركّب وبيبعت، قايمة الكتالوج بتتطوي — الإثبات هو الجهاز مش الوعد. بتفضل مفتوحة بس لما مفيش إثبات.",
+       "When a fitted device is sending, the catalogue list folds away \u2014 the proof is the device, not the promise. It stays open only where there is no proof."],
       ["«—» في خانة النشاط معناها إن بيانات النشاط مش متوفرة في المسح ده، مش إن الأجهزة واقفة.",
        "A dash in the activity cell means activity data is unavailable in this sweep, not that the devices are idle."],
     ]},

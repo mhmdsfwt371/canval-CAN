@@ -38,12 +38,14 @@ global.fetch = async name => ({ ok:true, json: async () => fixtures[name.replace
 const fixtures = {
   "vehicles.json": [
     { i:1, n:"ACME TRUCK", mk:"ACME", md:"TRUCK", y0:2019, y1:null, b:1,
-      f:6, a:0, c:2, s:[{n:"Fuel Level"},{n:"RPM"}],
+      f:6, a:0, c:2, s:["Fuel Level","RPM"], x:["Trunk Open"],
       lv:{ n:6, k:3, r:2, t:1754500000,
            s:[{n:"Fuel Level", v:"41", u:"%", t:1754500000},
-              {n:"RPM", t:0}] } },
+              {n:"RPM", t:0}],
+           d:[{i:"860000000000001", u:"TRUCK-1", o:"acme_co", cb:"someone",
+               t:1754500000, r:[{n:"Fuel Level", v:"41"}, {n:"RPM"}]}] } },
     { i:2, n:"ACME TRUCK", mk:"ACME", md:"TRUCK", y0:2024, y1:null, b:1,
-      f:2, a:0, c:1, s:[{n:"Fuel Level"}], lv:{ n:2, k:2, r:0, s:[] } },
+      f:2, a:0, c:1, s:["Fuel Level"], lv:{ n:2, k:2, r:0, s:[] } },
     { i:3, n:"J1939 GENERIC", mk:null, md:null, g:1, y0:null, y1:null, b:1,
       f:50, a:0, c:3, s:[], lv:{ n:6, k:2, r:1, s:[{n:"Odometer", v:"88", t:1}] } },
   ],
@@ -104,6 +106,16 @@ const run = `
   check("open card is marked",                store["cards"].innerHTML.includes('card on'), true);
   store["cards"].fire("click", {target:{closest: s => s === ".card" ? {dataset:{n:"0"}} : null}});
   check("second tap closes",                  state.cardOn, null);
+
+  // -- catalogue promise only where nothing is proven ----------------
+  const proven   = detail(state.v.find(x => x.i === 1));   // has live readings
+  const unproven = detail(state.v.find(x => x.i === 2));   // sampled, silent
+  check("proven file folds the promise",  proven.includes('class="dtog"'), true);
+  check("proven file hides the chips",    proven.includes('class="decl" hidden'), true);
+  check("proven file still shows devices", proven.includes("860000000000001"), true);
+  check("unproven file shows the promise", unproven.includes('class="dtog"'), false);
+  check("unproven promise is not hidden",  unproven.includes('class="decl" hidden'), false);
+  check("unproven names its signals",      unproven.includes("Fuel Level"), true);
 
   // -- share text carries the whole answer ---------------------------
   state.pick = {mk:"ACME"}; state.models = modelsOf("ACME"); cMdPick("TRUCK");
