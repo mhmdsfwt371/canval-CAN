@@ -152,6 +152,25 @@ body{background:var(--paper);color:var(--ink);font-family:var(--sans);
    analysis so it can be found without reading any of it. */
 .say{margin-top:11px;padding:9px 12px;background:var(--soft);
   border:1px dashed var(--line);border-radius:2px;font-size:14.5px}
+.lg{display:inline-flex;align-items:center;justify-content:center;
+  width:26px;height:26px;flex:none;vertical-align:middle}
+.lg img{width:100%;height:100%;object-fit:contain}
+.lg .mono{display:none;width:100%;height:100%;border-radius:50%;
+  align-items:center;justify-content:center;font-family:var(--sans);
+  font-weight:800;font-size:60%;color:#fff;
+  background:hsl(var(--h) 42% 38%)}
+.lg.nolo img{display:none}
+.lg.nolo .mono{display:flex}
+.lg.big{width:46px;height:46px}
+.lg.card-lg{position:absolute;top:12px;inset-inline-start:14px;
+  width:30px;height:30px}
+.pickhead{display:flex;align-items:center;gap:12px;margin:0 0 12px}
+.pickhead .pname{font-size:21px;font-weight:800;letter-spacing:.01em}
+.pickhead .pyr{font-family:var(--mono);color:var(--muted);font-size:14px}
+.see{font-size:12.5px;font-family:var(--mono);color:var(--canl);
+  text-decoration:none;border-bottom:1px dotted var(--canl)}
+.see:hover{border-bottom-style:solid}
+.card{position:relative}
 .dtog{font-family:var(--mono);font-size:11px;color:var(--muted);
   background:none;border:none;border-bottom:1px dotted var(--line);
   padding:0 0 2px;cursor:pointer;margin-bottom:8px}
@@ -409,7 +428,7 @@ const esc = s => (s ?? "").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;")
    the page may be Arabic, and only an isolate keeps them whole. */
 const bdi = s => `<bdi dir="${/[\u0600-\u06FF]/.test(s ?? "") ? "rtl" : "ltr"}">${esc(s)}</bdi>`;
 const THIS_YEAR = new Date().getFullYear();
-const VERSION = "1.9";
+const VERSION = "2.0";
 const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"ar"};
 
 /* What changed, and when. Kept beside the code rather than in a document
@@ -418,6 +437,12 @@ const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"a
    about. Newest first. The rule that goes with it: a new version adds,
    it does not quietly change what already worked. */
 const CHANGES = [
+  {v:"2.0", d:"2026-08-08", items:[
+    ["الماركات بقى ليها وش: اللوجو الحقيقي على الكروت وفي قايمة الأنواع وفوق النتيجة، ودايرة ملوّنة بأول حرف لأي ماركة ملهاش لوجو — النهارده أو اللي هتظهر الشهر الجاي.",
+     "Makes now have a face: the real logo on the cards, in the type list and above the answer, and a coloured monogram for any make without one \u2014 today or next month."],
+    ["جنب اسم العربية لينك «شوف شكلها (صور)» بيفتح صور الموديل في تبويب جديد.",
+     "Beside the vehicle name, a \u201csee what it looks like\u201d link opens the model\u2019s pictures in a new tab."],
+  ]},
   {v:"1.9", d:"2026-08-08", items:[
     ["قايمة «الإشارات المعلنة في الكتالوج» بقت تظهر بس في الحالات اللي مفيش فيها جهاز مركّب بيقرا. طالما فيه تركيب شغّال، هو الإثبات والوعد بيتطوي ورا سطر صغير للاطلاع.",
      "The catalogue signal list now appears only where no fitted device is reading. Where an installation is working, that is the proof, and the promise folds behind one small line."],
@@ -599,6 +624,7 @@ const STR = {
   share:      ["شارك النتيجة", "Share the result"],
   copied:     ["اتنسخت — الزقها في واتساب أو إيميل", "Copied \u2014 paste it anywhere"],
   zoomTip:    ["كبّر الخط", "Text size"],
+  seeCar:     ["شوف شكلها (صور)", "See what it looks like (images)"],
   cardOpen:   ["دوس تاني تقفلها", "Tap again to close"],
   generic:    ["بروتوكول عام", "generic protocol"],
   anyYear:    ["كل السنوات", "any year"],
@@ -689,7 +715,7 @@ function combo(id, opts){
             esc(i.label.slice(at,at+q.length)) + "</mark>" + esc(i.label.slice(at+q.length));
         }
         return `<div class="opt" role="option" data-v="${esc(i.value)}"
-          aria-selected="${n === active}"><bdi dir="${
+          aria-selected="${n === active}">${i.logo ? logoHtml(i.value) : ""}<bdi dir="${
           /[\u0600-\u06FF]/.test(i.label) ? "rtl" : "ltr"}">${label}</bdi>${
           i.count ? `<span class="c">${i.count}</span>` : ""}</div>`;
       }).join("");
@@ -760,7 +786,7 @@ function buildMakes(){
     m.set(v.mk, (m.get(v.mk)||0) + (v.f ? 1 : 0));   // own, not a make
   }
   state.makes = [...m.keys()].sort()
-    .map(k => ({value:k, label:k, count:m.get(k) || ""}));
+    .map(k => ({value:k, label:k, count:m.get(k) || "", logo:true}));
 }
 function modelsOf(mk){
   const m = new Map();
@@ -784,6 +810,25 @@ function yearsOf(files){
     .concat([...y].sort((a,b) => b-a).map(v => ({value:String(v), label:String(v)})));
 }
 const coverYear = (f,y) => !y || !f.y0 || (y >= f.y0 && y <= (f.y1 || THIS_YEAR));
+
+/* A make's face. 96 of them are the real logos, vendored into the repo
+   so nothing depends on anyone else's server. The rest -- the brand-new
+   Chinese marques, the farm equipment, the oddballs -- get a monogram in
+   a colour hashed from the name, so every make has SOME face, today and
+   for any make that appears next month. The swap happens through the
+   image's own error event: no list to maintain. */
+const logoSlug = mk => (mk || "").toLowerCase()
+  .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+const hueOf = s => { let h = 0;
+  for(const c of s) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
+function logoHtml(mk, cls){
+  if(!mk) return "";
+  const mono = `<span class="mono" style="--h:${hueOf(mk)}">${
+    esc(mk.trim().slice(0,1).toUpperCase())}</span>`;
+  return `<span class="lg${cls ? " " + cls : ""}"><img src="logos/${
+    logoSlug(mk)}.png" alt="" loading="lazy"
+    onerror="this.parentNode.classList.add('nolo')">${mono}</span>`;
+}
 /* Whether this export carries activity data at all. When the sweep runs
    without it, every file reads zero -- and a page that prints "0 active"
    over a fleet it just proved is sending would be calling healthy
@@ -924,7 +969,14 @@ function renderPick(){
   const files = filesFor(mk, md);
   const v = verdict(files, yr ? +yr : null);
 
+  const seeQ = encodeURIComponent([mk, md, yr].filter(Boolean).join(" "));
   let html = `<button class="back" id="back">&#8629; ${T("back")}</button>
+    <div class="pickhead">${logoHtml(mk, "big")}
+      <div><div class="pname">${bdi(mk + " " + md)}</div>
+        <div class="pyr">${yr ? esc(String(yr)) + " \u00b7 " : ""}<a class="see"
+          target="_blank" rel="noopener"
+          href="https://www.google.com/search?tbm=isch&q=${seeQ}">${T("seeCar")}</a></div>
+      </div></div>
     <div class="verdict ${v.cls}"><h2>${esc(v.h)}</h2>`;
   if(v.nums) html += `<div class="nums">${v.nums
     .map(([n,l]) => `<span><b>${n}</b> ${esc(l)}</span>`).join("")}</div>`;
@@ -975,7 +1027,12 @@ function renderFree(){
   state.pick = null;
   ["mk","md","yr"].forEach(id => { $(id).value = ""; });
   $("md").disabled = $("yr").disabled = true;
-  $("out").innerHTML = `<div class="verdict bad">
+  $("out").innerHTML = `<div class="pickhead">${logoHtml(q, "big")}
+      <div><div class="pname">${bdi(q)}</div>
+        <div class="pyr"><a class="see" target="_blank" rel="noopener"
+          href="https://www.google.com/search?tbm=isch&q=${
+          encodeURIComponent(q)}">${T("seeCar")}</a></div></div></div>
+    <div class="verdict bad">
     <h2>${T("freeHead",{q:esc(q)})}</h2><p>${esc(T("freeP"))}</p></div>`
     + genericBlock(q);
   syncCards();
@@ -992,6 +1049,8 @@ function cards(){
       <button class="card${state.cardOn === n ? " on" : ""}" data-n="${n}"
               aria-pressed="${state.cardOn === n}"
               title="${state.cardOn === n ? T("cardOpen") : ""}">
+        ${c.g ? `<span class="lg card-lg">${pairSvg(1)}</span>`
+              : logoHtml(c.mk || c.name, "card-lg")}
         <span class="cn">${bdi(c.mk || (c.g ? T("generic") : c.name))}</span>
         <span class="cm">${bdi(c.md || (c.g ? c.name : ""))}</span>
         <span class="cy">${c.y0 ? (c.y1 ? `${c.y0}\u2013${c.y1}` : `${c.y0}+`)
@@ -1273,6 +1332,10 @@ const GUIDE = {
        "Configurations: how many different configurations assign this file."],
       ["إشارة واصلة: عدد الحساسات اللي المنصة قرأتها فعلًا من الأجهزة اللي اتفحصت.",
        "Signals arriving: how many sensors the platform actually read from the sampled devices."],
+      ["كل ماركة ليها وش: لوجو حقيقي لـ96 ماركة، ودايرة ملوّنة بأول حرف للباقي — فلو الاسم جديد عليك، الشكل بيوصّل.",
+       "Every make has a face: real logos for 96 of them, a coloured monogram for the rest \u2014 so an unfamiliar name still reads at a glance."],
+      ["جنب اسم العربية لينك «شوف شكلها» بيفتح صورها — مفيد مع الموديلات الجديدة.",
+       "Beside the vehicle name, \u201csee what it looks like\u201d opens its pictures \u2014 handy with new models."],
       ["لما يكون فيه جهاز مركّب وبيبعت، قايمة الكتالوج بتتطوي — الإثبات هو الجهاز مش الوعد. بتفضل مفتوحة بس لما مفيش إثبات.",
        "When a fitted device is sending, the catalogue list folds away \u2014 the proof is the device, not the promise. It stays open only where there is no proof."],
       ["«—» في خانة النشاط معناها إن بيانات النشاط مش متوفرة في المسح ده، مش إن الأجهزة واقفة.",

@@ -49,7 +49,7 @@ const fixtures = {
     { i:3, n:"J1939 GENERIC", mk:null, md:null, g:1, y0:null, y1:null, b:1,
       f:50, a:0, c:3, s:[], lv:{ n:6, k:2, r:1, s:[{n:"Odometer", v:"88", t:1}] } },
   ],
-  "config.json": [ { i:9, nm:"ACME TRUCK 2019", hw:98 } ],
+  "configs.json": [ { i:9, nm:"ACME TRUCK 2019", hw:98 } ],
   "fleet.json": { estate:[["XtCAN 2G", 100]],
     top:[ {name:"ACME TRUCK", mk:"ACME", md:"TRUCK", y0:2019, y1:null, devices:8},
           {name:"J1939 GENERIC", g:1, y0:null, y1:null, devices:50} ] },
@@ -121,6 +121,14 @@ const run = `
   state.pick = {mk:"ACME"}; state.models = modelsOf("ACME"); cMdPick("TRUCK");
   check("share text names the vehicle",       (state.shareText||"").includes("ACME TRUCK"), true);
   check("share text carries the link",        (state.shareText||"").includes("https://"), true);
+
+  // -- every make has a face, every answer a look link ----------------
+  check("slug handles spaced names",  logoSlug("LAND ROVER"), "land-rover");
+  check("cards carry a logo cell",    store["cards"].innerHTML.includes('class="lg'), true);
+  check("cards carry the fallback",   store["cards"].innerHTML.includes('class="mono"'), true);
+  check("answer header shows the make", store["out"].innerHTML.includes("logos/acme.png"), true);
+  check("look link targets the pick", store["out"].innerHTML.includes("q=ACME%20TRUCK"), true);
+  check("make rows are marked for logos", !!(state.makes[0] && state.makes[0].logo), true);
 
   process.exit(failed ? 1 : 0);
 })().catch(e => { console.error("RUNTIME ERROR:", e.stack); process.exit(1); });
