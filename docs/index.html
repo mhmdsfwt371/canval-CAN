@@ -486,7 +486,7 @@ const esc = s => (s ?? "").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;")
    the page may be Arabic, and only an isolate keeps them whole. */
 const bdi = s => `<bdi dir="${/[\u0600-\u06FF]/.test(s ?? "") ? "rtl" : "ltr"}">${esc(s)}</bdi>`;
 const THIS_YEAR = new Date().getFullYear();
-const VERSION = "2.8";
+const VERSION = "2.9";
 const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"ar"};
 
 /* What changed, and when. Kept beside the code rather than in a document
@@ -711,6 +711,8 @@ const STR = {
                "These are configurations that name this vehicle, on devices carrying that file. Somebody already worked it out \u2014 start from the same file."],
   ownEmpty:   ["الملفات دي شايلة اسم العربية بس محدش متركب عليها — كل الشغل ماشي على الملف اللي فوق.",
                "These files carry the vehicle's name, but nothing is fitted on them \u2014 the working installations are all on the file above."],
+  crossCard:  ["الكارت اللي فوق بيعدّ الملف كله: {t} جهاز على {f} بكل العربيات اللي ماشية عليه. منهم {n} على العربية اللي بتدوّر عليها. افتح «إشارات» تشوف الأجهزة وقراياتها.",
+               "The card above counts the whole file: {t} devices on {f} across every vehicle running it. {n} of them are on the vehicle you asked about. Open \u201csignals\u201d for the devices and their readings."],
   csT:        ["تحكم ذكي بالسيارة", "Car sharing support"],
   capLock:    ["تحكم: قفل/فتح الأبواب", "Control: lock / unlock"],
   shT:        ["صور التركيب", "Fitting photos"],
@@ -1400,9 +1402,20 @@ function renderPick(){
   const [best, wider] = splitByFit(v.inYear, yr ? +yr : null);
   const ownNone = !v.inYear.some(f => f.f);
   const crossHtml = cross.length ? `<h3 class="sec">${T("crossT")}</h3>
-    <div class="list">${cross.map(c => `<div class="crow">
+    <div class="list">${cross.map(c => {
+      const f = state.v.find(x => x.i === c.i);
+      return `<div class="crow">
       <b>${bdi(c.fl)}</b><span class="cn">${c.n} ${esc(T("nFitted"))}</span>
-      <i>${c.names.map(bdi).join(" \u00b7 ")}</i></div>`).join("")}</div>
+      <i>${c.names.map(bdi).join(" \u00b7 ")}</i></div>` +
+      // The file's own card, so the signals button is there to open:
+      // IMEIs, what each device is sending, and the lock-script count.
+      // Its numbers are the file's whole total across every vehicle on
+      // it, which is a different figure from the crossing above -- the
+      // line under the card says so rather than leaving two numbers to
+      // be read as a contradiction.
+      (f ? fileRow(f) + `<div class="note xfnote">${
+        esc(T("crossCard", {n: c.n, t: f.f, f: c.fl}))}</div>` : "");
+    }).join("")}</div>
     <div class="note">${esc(T("crossNote"))}</div>` : "";
   // The file that carries the work goes first. With nothing fitted on
   // its own files, those rows are all zeros, and printing them above
