@@ -486,7 +486,7 @@ const esc = s => (s ?? "").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;")
    the page may be Arabic, and only an isolate keeps them whole. */
 const bdi = s => `<bdi dir="${/[\u0600-\u06FF]/.test(s ?? "") ? "rtl" : "ltr"}">${esc(s)}</bdi>`;
 const THIS_YEAR = new Date().getFullYear();
-const VERSION = "3.2";
+const VERSION = "3.3";
 const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"ar"};
 
 /* What changed, and when. Kept beside the code rather than in a document
@@ -1465,6 +1465,11 @@ function renderPick(){
     if(cf && cf.sc && cf.sc.n){
       v.cs = {n: cf.sc.n, s: cf.sc.s, t: cf.f, f: top.fl};
     }
+    /* Same borrowed file, same reason: the readings hang off it too.
+       Fixing the lock box alone left the banner showing a single amber
+       chip with nothing beside it, so a car whose file reports eleven
+       live signals looked less proven than one that reports none. */
+    if(cf && cf.lv) v.lv = liveOf([cf]);
   }
 
   const seeQ = encodeURIComponent([mk, md, yr].filter(Boolean).join(" "));
