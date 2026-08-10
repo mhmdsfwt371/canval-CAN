@@ -486,7 +486,7 @@ const esc = s => (s ?? "").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;")
    the page may be Arabic, and only an isolate keeps them whole. */
 const bdi = s => `<bdi dir="${/[\u0600-\u06FF]/.test(s ?? "") ? "rtl" : "ltr"}">${esc(s)}</bdi>`;
 const THIS_YEAR = new Date().getFullYear();
-const VERSION = "2.9";
+const VERSION = "3.0";
 const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"ar"};
 
 /* What changed, and when. Kept beside the code rather than in a document
@@ -889,6 +889,7 @@ const LOCAL = (() => {
     shared: false,
     needsAuth: () => false,
     signIn: async () => {},
+    resume: async () => null,
     async list(car){
       if(!this.ready()) return [];
       const all = await req((await shop("readonly")).index("car").getAll(car));
@@ -919,7 +920,53 @@ const DRIVE = (() => {
   const API = "https://www.googleapis.com/drive/v3";
   const UP = "https://www.googleapis.com/upload/drive/v3/files";
   const SCOPE = "https://www.googleapis.com/auth/drive.file";
-  let token = null, folder = null, client = null;
+  let token = null, folder = null, client = null, resumed = false;
+
+  /* A sales person looks up one car, refreshes, looks up the next. The
+     token used to live in this variable alone, so every refresh wiped it
+     and put a sign-in dialog in the way -- the fastest way to build a
+     tool nobody opens. Two things keep them out of it now: the token is
+     kept for the life of the tab, and when it is gone the page asks
+     Google again without a prompt, which answers silently while the
+     grant stands.
+
+     sessionStorage, not localStorage: it dies with the tab, and the
+     token it holds reaches only files this page made. */
+  const KEY = "canval.drive.tok";
+  const cached = () => {
+    try{
+      const c = JSON.parse(sessionStorage.getItem(KEY) || "null");
+      // A minute of margin, so a token cannot expire mid-upload.
+      if(c && c.t && c.exp > Date.now() + 60000) return (token = c.t);
+    }catch(e){ /* storage blocked -- carry on without it */ }
+    return null;
+  };
+  const keep = (t, secs) => {
+    token = t;
+    try{
+      sessionStorage.setItem(KEY, JSON.stringify(
+        {t, exp: Date.now() + (secs > 0 ? secs : 3600) * 1000}));
+    }catch(e){ /* nothing to do; the tab still holds it in memory */ }
+    return t;
+  };
+  const forget = () => {
+    token = null;
+    try{ sessionStorage.removeItem(KEY); }catch(e){}
+  };
+
+  const ask = (prompt) => gis().then(() => new Promise((res, rej) => {
+    client = client || google.accounts.oauth2.initTokenClient(
+      {client_id: GOOGLE_CLIENT_ID, scope: SCOPE, prompt: "",
+       callback: () => {}});
+    client.callback = r => r.access_token
+      ? res(keep(r.access_token, +r.expires_in))
+      : rej(new Error(r.error || "sign-in refused"));
+    // Fires when the popup is blocked or a silent attempt cannot be made
+    // at all. Without it the promise never settles and the button sticks
+    // on "signing in" forever.
+    client.error_callback = e => rej(new Error((e && e.type) || "blocked"));
+    client.requestAccessToken({prompt});
+  }));
 
   const gis = () => new Promise((res, rej) => {
     if(window.google && window.google.accounts) return res();
@@ -933,7 +980,7 @@ const DRIVE = (() => {
   const call = async (path, opts = {}) => {
     const r = await fetch(path.startsWith("http") ? path : API + path, {
       ...opts, headers: {Authorization: `Bearer ${token}`, ...(opts.headers || {})}});
-    if(r.status === 401){ token = null; throw new Error("signed out"); }
+    if(r.status === 401){ forget(); throw new Error("signed out"); }
     if(!r.ok) throw new Error(`${r.status} ${(await r.text()).slice(0, 200)}`);
     return r.status === 204 ? null : r.json();
   };
@@ -957,18 +1004,19 @@ const DRIVE = (() => {
   return {
     ready: () => !!GOOGLE_CLIENT_ID,
     shared: true,
-    needsAuth: () => !token,
-    async signIn(){
-      await gis();
-      return new Promise((res, rej) => {
-        client = client || google.accounts.oauth2.initTokenClient(
-          {client_id: GOOGLE_CLIENT_ID, scope: SCOPE, callback: () => {}});
-        client.callback = r => r.access_token
-          ? res(token = r.access_token)
-          : rej(new Error(r.error || "sign-in refused"));
-        client.requestAccessToken();
-      });
+    needsAuth: () => !token && !cached(),
+    /* The quiet door, tried once when the page loads: with the grant
+       still in place Google answers with nothing on screen. Failure
+       here is not an error -- it only means the button has to show. */
+    async resume(){
+      if(cached()) return token;
+      if(resumed) return null;
+      resumed = true;
+      try{ return await ask(""); }catch(e){ return null; }
     },
+    /* The loud door, behind the button, reached only when the quiet one
+       came back empty. */
+    async signIn(){ return ask("consent"); },
     async list(car){
       if(!token) return [];
       const fid = await folderId();
@@ -1470,6 +1518,13 @@ async function mountShots(mk, md, yr){
   if(!grid) return;
   if(!SHOTS.ready()){ grid.innerHTML = `<div class="empty">${T("shNo")}</div>`; return; }
   const car = shotCar(mk, md);
+
+  // Ask Google quietly first. On a refresh this hands back the account
+  // already granted and nothing appears on screen at all.
+  if(SHOTS.needsAuth() && SHOTS.resume){
+    grid.innerHTML = `<div class="empty">${esc(T("shSigning"))}</div>`;
+    await SHOTS.resume();
+  }
 
   // Shared storage means an account. Say so plainly and once, with the
   // button right there, instead of an empty box that looks broken.
