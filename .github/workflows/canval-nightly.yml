@@ -47,6 +47,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -88,14 +90,32 @@ jobs:
       - name: Export the site data
         run: python -m canval.export_site --out docs/data
 
+    # This job can run for an hour and a half. Anyone pushing in that
+      # window moves main forward, and a plain `git push` is then refused
+      # as non-fast-forward -- throwing away a full night's sweep because
+      # of a one-line change to the page. The data files are written by
+      # this job alone, so there is nothing for a rebase to argue with.
       - name: Publish
         run: |
-          git config user.name  "canval"
+          git config user. name  "canval"
           git config user.email "canval@users.noreply.github.com"
           git add docs/data
           if git diff --staged --quiet; then
             echo "Nothing changed since the last run."
-          else
-            git commit -m "data: refresh $(date -u '+%Y-%m-%d %H:%M UTC')"
-            git push
+            exit 0
           fi
+          git commit -m "data: refresh $(date -u '+%Y-%m-%d %H:%M UTC')"
+          for attempt in 1 2 3; do
+            if git push; then
+              echo "Published on attempt $attempt."
+              exit 0
+            fi
+            echo "Push refused -- main moved. Rebasing (attempt $attempt)."
+            if ! git pull --rebase --autostash origin main; then
+              git rebase --abort || true
+              echo "::error::Rebase hit a conflict in the data files."
+              exit 1
+            fi
+          done
+          echo "::error::Still refused after three attempts."
+          exit 1
