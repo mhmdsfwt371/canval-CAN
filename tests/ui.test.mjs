@@ -134,6 +134,14 @@ const run = `
   check("share text carries the lock line", (state.shareText||"").includes(T("csShare",{n:5})), true);
 
   // -- every make has a face, every answer a look link ----------------
+  // -- Arabic typing reaches a Latin catalogue -----------------------
+  check("Arabic make finds the Latin one", !!qhit("KIA", "كيا"), true);
+  check("half a word is enough",           !!qhit("CERATO", "سير"), true);
+  check("Latin still works lowercase",     !!qhit("KIA", "kia"), true);
+  check("a wrong make still misses",       qhit("KIA", "بيجو"), null);
+  check("empty query shows everything",    qhit("KIA", ""), "");
+  check("the highlight is the translation", qhit("KIA", "كيا"), "kia");
+
   check("slug handles spaced names",  logoSlug("LAND ROVER"), "land-rover");
   check("cards carry a logo cell",    store["cards"].innerHTML.includes('class="lg'), true);
   check("cards carry the fallback",   store["cards"].innerHTML.includes('class="mono"'), true);

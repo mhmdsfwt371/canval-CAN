@@ -440,7 +440,7 @@ const esc = s => (s ?? "").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;")
    the page may be Arabic, and only an isolate keeps them whole. */
 const bdi = s => `<bdi dir="${/[\u0600-\u06FF]/.test(s ?? "") ? "rtl" : "ltr"}">${esc(s)}</bdi>`;
 const THIS_YEAR = new Date().getFullYear();
-const VERSION = "2.2";
+const VERSION = "2.3";
 const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"ar"};
 
 /* What changed, and when. Kept beside the code rather than in a document
@@ -449,9 +449,13 @@ const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"a
    about. Newest first. The rule that goes with it: a new version adds,
    it does not quietly change what already worked. */
 const CHANGES = [
+  {v:"2.3", d:"2026-08-10", items:[
+    ["البحث بقى بيفهم العربي: اكتب «كيا» أو «سير» في خانة الماركة أو الموديل وهي تلاقيها في القايمة الإنجليزية، والكلمة المقابلة بتتظلّل عشان عينك توصلها. واتزودت عشرات الماركات والموديلات اللي الناس بتكتبها عربي.",
+     "The search understands Arabic now: type \u0643\u064a\u0627 or half a word into the make or model box and it finds the Latin entry, with the matching word highlighted so the eye lands on it. Dozens more makes and models people type in Arabic were added."],
+  ]},
   {v:"2.2", d:"2026-08-10", items:[
     ["تحكم ذكي بالسيارة: لو فيه أجهزة من الموديل شغّالة بسكربت قفل/فتح، النتيجة بتقول كده بالعدد وباسم السكربت نفسه، وبتظهر شريحة «تحكم: قفل/فتح الأبواب» جنب الحساسات، والجملة الجاهزة للعميل بتتوسع تلقائيًا. الدليل تركيبات حقيقية، مش وعد كتالوج.",
-     "Smart vehicle control: when devices of the model run a lock/unlock script, the verdict says so \u2014 with the count and the script's own name \u2014 and the customer sentence grows to match. The proof is real installations, not a catalogue promise."],
+     "Car sharing support: when devices of the model run a lock/unlock script, the verdict says so \u2014 with the count and the script's own name \u2014 and the customer sentence grows to match. The proof is real installations, not a catalogue promise."],
   ]},
   {v:"2.1", d:"2026-08-09", items:[
     ["إصلاح: اللوجو كان راكب على اسم الماركة في الكروت — اتنقل للركن المقابل للنص، فبيفضلوا متباعدين في العربي والإنجليزي.",
@@ -633,12 +637,12 @@ const STR = {
   say:        ["اللي تقوله للعميل", "What to tell the customer"],
   sayOk:      ["مدعومة ومجرّبة في أسطولنا — بنقرا منها {s} وغيرهم.",
                "Supported and proven in our own fleet — we read {s} and more from it."],
-  csT:        ["تحكم ذكي بالسيارة", "Smart vehicle control"],
+  csT:        ["تحكم ذكي بالسيارة", "Car sharing support"],
   capLock:    ["تحكم: قفل/فتح الأبواب", "Control: lock / unlock"],
   csLine:     ["التحكم في الأبواب مثبت فعلًا: {n} جهاز من الموديل ده شغال بسكربت قفل/فتح عن بُعد.",
                "Door control is field-proven: {n} devices of this model run a remote lock/unlock script."],
   csShare:    ["وتدعم كذلك التحكم الذكي بالسيارة — قفل وفتح عن بُعد ({n} جهاز مثبت).",
-               "Also does smart vehicle control \u2014 remote lock/unlock ({n} devices proven)."],
+               "Also supports car sharing \u2014 remote lock/unlock ({n} devices proven)."],
   sayPend:    ["مدعومة والتركيبات شغّالة، وبنأكد قايمة الإشارات النهائية خلال يوم أو يومين.",
                "Supported and installed; the final signal list is confirmed within a day or two."],
   sayQuiet:   ["فيه تركيبات بس ساكتة من شهر — راجع R&D قبل أي وعد.",
@@ -711,13 +715,43 @@ const ALIAS = {"شاكمان":"shacman","شكمان":"shacman","مرسيدس":"m
 "هونداي":"hyundai","كيا":"kia","فورد":"ford","شيفروليه":"chevrolet",
 "بيجو":"peugeot","رينو":"renault","فيات":"fiat","دايو":"daewoo",
 "ميتسوبيشي":"mitsubishi","اكسنت":"accent","النترا":"elantra","بيجاس":"pegas",
-"سيراتو":"cerato","كورولا":"corolla","برادو":"prado"};
+"سيراتو":"cerato","كورولا":"corolla","برادو":"prado",
+"مازدا":"mazda","هوندا":"honda","سوزوكي":"suzuki","جيلي":"geely",
+"شانجان":"changan","شانغان":"changan","هافال":"haval","شيري":"chery",
+"جاك موتورز":"jac","ام جي":"mg","جيتور":"jetour","لكزس":"lexus",
+"لاند روفر":"land","لاندروفر":"land","جيب":"jeep","دودج":"dodge",
+"رام":"ram","جي ام سي":"gmc","كاديلاك":"cadillac","فولكس":"volkswagen",
+"فولكسفاجن":"volkswagen","بي ام دبليو":"bmw","اودي":"audi",
+"سكودا":"skoda","اوبل":"opel","تسلا":"tesla","انفينيتي":"infiniti",
+"جيتا":"jetta","سنترا":"sentra","صني":"sunny","باترول":"patrol",
+"تاهو":"tahoe","سلفرادو":"silverado","اوبتيما":"optima","سبورتاج":"sportage",
+"سورينتو":"sorento","توسان":"tucson","سانتافي":"santa","النترا":"elantra",
+"كامري":"camry","افالون":"avalon","يارس":"yaris","لاندكروزر":"land",
+"فورتشنر":"fortuner","دينا":"dyna","كانتر":"canter"};
 function fold(s){
   return (s||"").toString().toLowerCase()
     .replace(/[\u064B-\u0652\u0670\u0640]/g,"")
     .replace(/[أإآٱ]/g,"ا").replace(/ة/g,"ه").replace(/[ىئ]/g,"ي")
     .replace(/ؤ/g,"و").replace(/ء/g,"").replace(/[^\w\u0600-\u06FF]+/g," ").trim();
 }
+/* The catalogue is written in Latin letters and half the people asking
+   type Arabic, so a query the alias table can translate is answered by
+   the translation: "كيا" finds KIA. Partial spelling counts too --
+   nobody finishes typing a word before they look up at the list.
+   Returns the text to highlight, "" for an empty query, null for no
+   match, so the caller filters and highlights from one decision. */
+function qhit(label, raw){
+  const q = fold(raw), L = fold(label);
+  if(!q) return "";
+  if(L.includes(q)) return q;
+  if(!/[\u0600-\u06FF]/.test(q)) return null;
+  for(const w of terms(raw))
+    if(!/[\u0600-\u06FF]/.test(w) && L.includes(w)) return w;
+  for(const [a, l] of Object.entries(ALIAS))
+    if(fold(a).includes(q) && L.includes(l)) return l;
+  return null;
+}
+
 function terms(s){
   let t = " "+fold(s)+" ";
   for(const [a,l] of Object.entries(ALIAS)) t = t.split(a).join(" "+l+" ");
@@ -730,17 +764,22 @@ function combo(id, opts){
   let items = [], active = -1, open = false;
 
   const draw = () => {
-    const q = fold(input.value);
-    const shown = (q ? items.filter(i => fold(i.label).includes(q)) : items).slice(0,300);
+    const raw = input.value, q = fold(raw);
+    const shown = (q ? items.filter(i => qhit(i.label, raw) !== null)
+                     : items).slice(0,300);
     if(!shown.length){
       menu.innerHTML = `<div class="opt none">${esc(T("noMatch"))}</div>`;
     }else{
       menu.innerHTML = shown.map((i,n) => {
         let label = esc(i.label);
         if(q){
-          const at = fold(i.label).indexOf(q);
+          // Highlight what actually matched -- for an Arabic query that
+          // is the word it translated to, which is what the eye is
+          // looking for in a Latin list.
+          const hit = qhit(i.label, raw) || "";
+          const at = hit ? fold(i.label).indexOf(hit) : -1;
           if(at >= 0) label = esc(i.label.slice(0,at)) + "<mark>" +
-            esc(i.label.slice(at,at+q.length)) + "</mark>" + esc(i.label.slice(at+q.length));
+            esc(i.label.slice(at,at+hit.length)) + "</mark>" + esc(i.label.slice(at+hit.length));
         }
         return `<div class="opt" role="option" data-v="${esc(i.value)}"
           aria-selected="${n === active}">${i.logo ? logoHtml(i.value) : ""}<bdi dir="${
