@@ -171,6 +171,29 @@ body{background:var(--paper);color:var(--ink);font-family:var(--sans);
 .lg svg{width:100%;height:100%}
 .card .cn,.card .cm{padding-inline-end:40px}
 .opt .lg{width:20px;height:20px;margin-inline-end:8px}
+.shots{margin:0 0 14px}
+.shhead{display:flex;align-items:center;gap:9px;margin-bottom:7px}
+.shhead b{font-size:14px}
+.shn{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.shadd{margin-inline-start:auto;font-family:var(--mono);font-size:12.5px;
+  color:var(--canl);border:1px dashed var(--canl);border-radius:2px;
+  padding:4px 10px;cursor:pointer}
+.shadd:hover{background:var(--chip)}
+.shgrid{display:grid;gap:8px;
+  grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+.shot{margin:0;border:1px solid var(--line);border-radius:2px;
+  background:var(--panel);overflow:hidden}
+/* The year you asked for is marked, not filtered: a fitting from another
+   year is usually the same wiring, and hiding it loses more than it saves. */
+.shot[data-hit="1"]{border-color:var(--canl)}
+.shot img{display:block;width:100%;height:112px;object-fit:cover;cursor:zoom-in}
+.shot figcaption{display:flex;align-items:center;gap:6px;padding:5px 7px;
+  font-size:11.5px;color:var(--muted)}
+.shy{font-family:var(--mono);color:var(--ink)}
+.shdel{margin-inline-start:auto;background:none;border:0;cursor:pointer;
+  color:var(--muted);font-size:15px;line-height:1;padding:0 2px}
+.shdel:hover{color:var(--alert)}
+.shots .empty{font-size:13px;color:var(--muted);padding:10px 0}
 .pickhead{display:flex;align-items:center;gap:12px;margin:0 0 12px}
 .pickhead .pname{font-size:21px;font-weight:800;letter-spacing:.01em}
 .pickhead .pyr{font-family:var(--mono);color:var(--muted);font-size:14px}
@@ -440,7 +463,7 @@ const esc = s => (s ?? "").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;")
    the page may be Arabic, and only an isolate keeps them whole. */
 const bdi = s => `<bdi dir="${/[\u0600-\u06FF]/.test(s ?? "") ? "rtl" : "ltr"}">${esc(s)}</bdi>`;
 const THIS_YEAR = new Date().getFullYear();
-const VERSION = "2.3";
+const VERSION = "2.4";
 const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"ar"};
 
 /* What changed, and when. Kept beside the code rather than in a document
@@ -449,6 +472,10 @@ const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"a
    about. Newest first. The rule that goes with it: a new version adds,
    it does not quietly change what already worked. */
 const CHANGES = [
+  {v:"2.4", d:"2026-08-10", items:[
+    ["صور التركيب: تحت اسم العربية بقى فيه مكان ترفع فيه صور التركيب من الموبايل، وتفضل محفوظة تلاقيها لما تدور على نفس الموديل تاني. الصورة بتتسجل بسنة الموديل، والسنة اللي بتدور عليها بتيجي الأول وليها إطار، والسنين التانية بتفضل ظاهرة ومكتوب عليها سنتها — تركيبة سنة قريبة غالبًا نفس التوصيل. (دلوقتي الصور محفوظة على جهازك أنت؛ المشاركة مع التيم الخطوة الجاية.)",
+     "Fitting photos: under the vehicle name there is now a place to add photos from your phone, kept so you find them the next time you look up the same model. Each photo records its year; the year you asked for comes first and is outlined, other years stay visible and labelled \u2014 a nearby year is usually the same wiring. (For now photos live on your own device; sharing with the team is next.)"],
+  ]},
   {v:"2.3", d:"2026-08-10", items:[
     ["البحث بقى بيفهم العربي: اكتب «كيا» أو «سير» في خانة الماركة أو الموديل وهي تلاقيها في القايمة الإنجليزية، والكلمة المقابلة بتتظلّل عشان عينك توصلها. واتزودت عشرات الماركات والموديلات اللي الناس بتكتبها عربي.",
      "The search understands Arabic now: type \u0643\u064a\u0627 or half a word into the make or model box and it finds the Latin entry, with the matching word highlighted so the eye lands on it. Dozens more makes and models people type in Arabic were added."],
@@ -639,6 +666,14 @@ const STR = {
                "Supported and proven in our own fleet — we read {s} and more from it."],
   csT:        ["تحكم ذكي بالسيارة", "Car sharing support"],
   capLock:    ["تحكم: قفل/فتح الأبواب", "Control: lock / unlock"],
+  shT:        ["صور التركيب", "Fitting photos"],
+  shAdd:      ["+ ارفع صورة", "+ Add a photo"],
+  shEmpty:    ["مفيش صور للموديل ده لسه — أول صورة تترفع تفضل هنا لما تدور عليها تاني.",
+               "No photos for this model yet \u2014 the first one stays here for the next time you look."],
+  shAny:      ["كل السنين", "Any year"],
+  shDel:      ["امسح الصورة", "Remove"],
+  shNo:       ["المتصفح ده مش بيحفظ صور — جرب متصفح تاني.",
+               "This browser will not keep photos \u2014 try another one."],
   csLine:     ["التحكم في الأبواب مثبت فعلًا: {n} جهاز من الموديل ده شغال بسكربت قفل/فتح عن بُعد.",
                "Door control is field-proven: {n} devices of this model run a remote lock/unlock script."],
   csShare:    ["وتدعم كذلك التحكم الذكي بالسيارة — قفل وفتح عن بُعد ({n} جهاز مثبت).",
@@ -756,6 +791,74 @@ function terms(s){
   let t = " "+fold(s)+" ";
   for(const [a,l] of Object.entries(ALIAS)) t = t.split(a).join(" "+l+" ");
   return t.split(/\s+/).filter(w => w.length > 1);
+}
+
+/* ============================================== photos of the fitting
+
+   The catalogue answers "is it supported". The person holding the wire
+   asks the next question -- where does it go -- and the only honest
+   answer to that is a picture of the last time somebody did it.
+
+   Kept per make + model + year, because that is exactly how the same
+   person will look for it the second time.
+
+   The store is the browser's own, so this works with nothing set up at
+   all. Everything above it goes through `SHOTS`, so putting the photos
+   somewhere the whole team can reach is a change to this object and to
+   nothing else. */
+const SHOTS = (() => {
+  const NAME = "canval-shots", STORE = "shots";
+  let dbp = null;
+  const open = () => dbp || (dbp = new Promise((res, rej) => {
+    const r = indexedDB.open(NAME, 1);
+    r.onupgradeneeded = () => {
+      const s = r.result.createObjectStore(STORE, {keyPath: "id"});
+      s.createIndex("car", "car");
+    };
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  }));
+  const req = r => new Promise((res, rej) => {
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+  const shop = async mode =>
+    (await open()).transaction(STORE, mode).objectStore(STORE);
+  return {
+    /* No store, no promises: the section says so instead of failing. */
+    ready: () => typeof indexedDB !== "undefined",
+    shared: false,
+    async list(car){
+      if(!this.ready()) return [];
+      const all = await req((await shop("readonly")).index("car").getAll(car));
+      return (all || []).sort((a, b) => b.at - a.at);
+    },
+    async add(rec){ await req((await shop("readwrite")).put(rec)); return rec; },
+    async del(id){ await req((await shop("readwrite")).delete(id)); },
+  };
+})();
+
+/* One car, one key -- folded, so "KIA"/"kia " land in the same place. */
+const shotCar = (mk, md) => fold(mk) + "|" + fold(md);
+
+/* Phone photos run 3-8 MB and a workshop's signal does not. Shrinking
+   before the upload is what makes this usable there -- and it is the
+   difference between a free tier holding 700 photos and 15,000. */
+function shrink(file, max = 1600, q = 0.82){
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.width * k);
+      c.height = Math.round(img.height * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      res({src: c.toDataURL("image/jpeg", q), w: c.width, h: c.height});
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error("not an image")); };
+    img.src = url;
+  });
 }
 
 /* ================================================== the dropdown itself */
@@ -1053,7 +1156,7 @@ function renderPick(){
         <div class="pyr">${yr ? esc(String(yr)) + " \u00b7 " : ""}<a class="see"
           target="_blank" rel="noopener"
           href="https://www.google.com/search?tbm=isch&q=${seeQ}">${T("seeCar")}</a></div>
-      </div></div>
+      </div></div>${shotsShell()}
     <div class="verdict ${v.cls}"><h2>${esc(v.h)}</h2>`;
   if(v.nums) html += `<div class="nums">${v.nums
     .map(([n,l]) => `<span><b>${n}</b> ${esc(l)}</span>`).join("")}</div>`;
@@ -1084,7 +1187,70 @@ function renderPick(){
       <div class="note">${esc(T("widerNote",{y:yr}))}</div>`;
   if(!v.inYear.some(f => f.f)) html += genericBlock(mk+" "+md);
   $("out").innerHTML = html;
+  mountShots(mk, md, yr);
   syncCards();
+}
+
+/* The strip lives directly under the vehicle name: whoever opened this
+   page came for a fitting, and this is the part they came for. */
+function shotsShell(){
+  return `<div class="shots" id="shots">
+    <div class="shhead"><b>${T("shT")}</b>
+      <span class="shn" id="shn"></span>
+      <label class="shadd">${T("shAdd")}<input id="shin" type="file"
+        accept="image/*" multiple hidden></label>
+    </div>
+    <div class="shgrid" id="shgrid"></div></div>`;
+}
+
+async function mountShots(mk, md, yr){
+  const grid = document.getElementById("shgrid");
+  if(!grid) return;
+  if(!SHOTS.ready()){ grid.innerHTML = `<div class="empty">${T("shNo")}</div>`; return; }
+  const car = shotCar(mk, md);
+
+  const paint = async () => {
+    let rows = [];
+    try { rows = await SHOTS.list(car); }
+    catch(e){ grid.innerHTML = `<div class="empty">${T("shNo")}</div>`; return; }
+    const n = document.getElementById("shn");
+    if(n) n.textContent = rows.length ? String(rows.length) : "";
+    if(!rows.length){ grid.innerHTML = `<div class="empty">${T("shEmpty")}</div>`; return; }
+    // The year asked for comes first, but a fitting from another year is
+    // still the same wiring far more often than not -- so it is shown,
+    // labelled, rather than hidden and quietly missed.
+    if(yr) rows.sort((a, b) => (b.yr == yr) - (a.yr == yr) || b.at - a.at);
+    grid.innerHTML = rows.map(r => `<figure class="shot"${
+      yr && r.yr == yr ? ' data-hit="1"' : ""}>
+      <img src="${r.src}" alt="" loading="lazy">
+      <figcaption><span class="shy">${esc(r.yr || T("shAny"))}</span>${
+        r.note ? esc(r.note) : ""}<button class="shdel" data-id="${
+        esc(r.id)}" title="${T("shDel")}">\u00d7</button></figcaption>
+    </figure>`).join("");
+  };
+
+  grid.onclick = async e => {
+    const del = e.target.closest(".shdel");
+    if(del){ await SHOTS.del(del.dataset.id); paint(); return; }
+    const img = e.target.closest(".shot img");
+    if(img) window.open(img.src, "_blank");
+  };
+
+  const input = document.getElementById("shin");
+  if(input) input.onchange = async () => {
+    const files = [...(input.files || [])];
+    input.value = "";
+    for(const f of files){
+      try {
+        const shot = await shrink(f);
+        await SHOTS.add({
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          car, mk, md, yr: yr ? +yr : null, note: "", at: Date.now(), ...shot});
+      } catch(err){ /* one bad file must not lose the rest */ }
+    }
+    paint();
+  };
+  paint();
 }
 
 function genericBlock(query){

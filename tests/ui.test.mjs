@@ -142,6 +142,28 @@ const run = `
   check("empty query shows everything",    qhit("KIA", ""), "");
   check("the highlight is the translation", qhit("KIA", "كيا"), "kia");
 
+  // -- fitting photos, with a store standing in for the browser's ----
+  const mem = [];
+  SHOTS.ready = () => true;
+  SHOTS.list  = async () => mem.slice().sort((a, b) => b.at - a.at);
+  SHOTS.del   = async id => { const i = mem.findIndex(x => x.id === id);
+                              if(i >= 0) mem.splice(i, 1); };
+  check("one car, one key", shotCar("KIA ", " cerato"), "kia|cerato");
+  await mountShots("ACME", "TRUCK", 2024);
+  check("nothing yet, and it says so", store["shgrid"].innerHTML.includes(T("shEmpty")), true);
+
+  mem.push({id:"a", car:shotCar("ACME","TRUCK"), yr:2019, at:2, src:"data:,x", note:"OBD pin 6"});
+  mem.push({id:"b", car:shotCar("ACME","TRUCK"), yr:2024, at:1, src:"data:,y", note:""});
+  await mountShots("ACME", "TRUCK", 2024);
+  const g = store["shgrid"].innerHTML;
+  check("the year asked for leads",    g.indexOf('data-hit="1"') < g.indexOf("OBD pin 6"), true);
+  check("other years are kept",        g.includes("2019"), true);
+  check("the note rides with it",      g.includes("OBD pin 6"), true);
+  check("the count is on the header",  store["shn"].textContent, "2");
+  await SHOTS.del("a");
+  await mountShots("ACME", "TRUCK", 2024);
+  check("removing one leaves the rest", store["shn"].textContent, "1");
+
   check("slug handles spaced names",  logoSlug("LAND ROVER"), "land-rover");
   check("cards carry a logo cell",    store["cards"].innerHTML.includes('class="lg'), true);
   check("cards carry the fallback",   store["cards"].innerHTML.includes('class="mono"'), true);
