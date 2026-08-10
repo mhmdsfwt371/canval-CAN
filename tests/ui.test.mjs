@@ -51,6 +51,10 @@ const fixtures = {
       f:50, a:0, c:3, s:[], lv:{ n:6, k:2, r:1, s:[{n:"Odometer", v:"88", t:1}] } },
   ],
   "configs.json": [ { i:9, nm:"ACME TRUCK 2019", hw:98 } ],
+  // A vehicle with no file of its own, fitted on somebody else's.
+  "crossfits.json": [
+    { nm:"Beta-Wagon_2026-Upgraded XTCAN2G", fl:"ACME TRUCK", i:1, n:25, a:3 },
+  ],
   "fleet.json": { estate:[["XtCAN 2G", 100]],
     top:[ {name:"ACME TRUCK", mk:"ACME", md:"TRUCK", y0:2019, y1:null, devices:8},
           {name:"J1939 GENERIC", g:1, y0:null, y1:null, devices:50} ] },
@@ -182,6 +186,11 @@ const run = `
   check("signed out shows the door",  store["shgrid"].innerHTML.includes('id="shsign"'), true);
   check("and says why it is there",   store["shgrid"].innerHTML.includes(T("shSignWhy")), true);
   SHOTS.needsAuth = () => false;
+
+  // -- fitted under another vehicle's file ---------------------------
+  check("the crossing is found",   crossFor("BETA", "WAGON").length, 1);
+  check("and carries the file",    crossFor("BETA", "WAGON")[0].fl, "ACME TRUCK");
+  check("a stranger finds none",   crossFor("ACME", "TRUCK").length, 0);
 
   check("slug handles spaced names",  logoSlug("LAND ROVER"), "land-rover");
   check("cards carry a logo cell",    store["cards"].innerHTML.includes('class="lg'), true);

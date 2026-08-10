@@ -35,6 +35,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -213,6 +214,59 @@ def export_configs(conn) -> list[dict]:
     return out
 
 
+def _words(s: str) -> set:
+    """Lowercased word set, so 'Mitsubishi-Outlander_2026' yields both."""
+    return {w for w in re.split(r"[^0-9a-z\u0600-\u06FF]+", (s or "").lower())
+            if len(w) > 2}
+
+
+def export_crossfits(conn) -> list[dict]:
+    """Vehicles fitted under another vehicle's file.
+
+    A 2026 Outlander sits on a Nissan platform, so the file that works on
+    it is called NISSAN X-TRAIL. Twenty-five devices run exactly that, and
+    every one of them is proof the Outlander is supported -- but the
+    fitment is counted against the X-TRAIL file, so asking the page about
+    an Outlander produced "never installed on anything". The vehicle was
+    supported and the tool called it unsupported, which is the worst
+    answer it can give.
+
+    The configuration name is the evidence: a human wrote "Outlander" on
+    a device carrying an X-TRAIL file. This ships only those crossings --
+    where the file's own make and model appear nowhere in the name -- so
+    the page can answer "yes, on this file" instead of "no".
+    """
+    out = []
+    for r in conn.execute(
+            f"""SELECT d.config_name nm, d.file_id fid, f.name fl,
+                       f.make mk, f.model md,
+                       COUNT(DISTINCT d.imei) n,
+                       COUNT(DISTINCT CASE WHEN {_active_expr()}
+                                           THEN d.imei END) a
+                  FROM device_can d JOIN can_files f ON f.file_id = d.file_id
+                 WHERE d.config_name IS NOT NULL AND d.config_name != ''
+                   AND f.name IS NOT NULL AND f.name != ''
+                 GROUP BY d.config_name, d.file_id
+                 ORDER BY n DESC"""):
+        if _is_generic(r["fl"]):
+            continue                      # the generic path already has these
+        name_words = _words(r["nm"])
+        if not name_words:
+            continue
+        # If the file's own vehicle is named in the configuration, then
+        # nothing crossed over and there is nothing to explain.
+        own = _words(r["md"]) | _words(r["mk"])
+        if own & name_words:
+            continue
+        entry = {"nm": r["nm"], "fl": r["fl"], "i": r["fid"], "n": r["n"]}
+        if r["a"]:
+            entry["a"] = r["a"]
+        if r["mk"]:
+            entry["fmk"] = r["mk"]
+        out.append(entry)
+    return out[:1500]
+
+
 def export_fleet(conn) -> dict:
     """The estate at a glance, plus the three hint worklists."""
     estate = [
@@ -328,12 +382,14 @@ def main(argv=None) -> int:
     with connect(args.db) as conn:
         vehicles = export_vehicles(conn)
         configs = export_configs(conn)
+        crossfits = export_crossfits(conn)
         fleet = export_fleet(conn)
         meta = export_meta(conn, vehicles)
 
     written = []
     for name, payload in (("vehicles.json", vehicles),
                           ("configs.json", configs),
+                          ("crossfits.json", crossfits),
                           ("fleet.json", fleet),
                           ("meta.json", meta)):
         path = out / name

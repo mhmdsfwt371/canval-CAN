@@ -171,6 +171,12 @@ body{background:var(--paper);color:var(--ink);font-family:var(--sans);
 .lg svg{width:100%;height:100%}
 .card .cn,.card .cm{padding-inline-end:40px}
 .opt .lg{width:20px;height:20px;margin-inline-end:8px}
+.crow{padding:9px 12px;border:1px solid var(--line);border-radius:2px;
+  background:var(--panel);margin-bottom:6px;display:flex;
+  align-items:center;gap:10px;flex-wrap:wrap}
+.crow .cn{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.crow i{flex-basis:100%;font-family:var(--mono);font-size:10.5px;
+  font-style:normal;color:var(--muted)}
 .shots{margin:0 0 14px}
 .shhead{display:flex;align-items:center;gap:9px;margin-bottom:7px}
 .shhead b{font-size:14px}
@@ -480,7 +486,7 @@ const esc = s => (s ?? "").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;")
    the page may be Arabic, and only an isolate keeps them whole. */
 const bdi = s => `<bdi dir="${/[\u0600-\u06FF]/.test(s ?? "") ? "rtl" : "ltr"}">${esc(s)}</bdi>`;
 const THIS_YEAR = new Date().getFullYear();
-const VERSION = "2.6";
+const VERSION = "2.7";
 const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"ar"};
 
 /* What changed, and when. Kept beside the code rather than in a document
@@ -489,6 +495,10 @@ const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"a
    about. Newest first. The rule that goes with it: a new version adds,
    it does not quietly change what already worked. */
 const CHANGES = [
+  {v:"2.7", d:"2026-08-10", items:[
+    ["عربية ملهاش ملف باسمها بس متركبة فعلًا بملف عربية تانية بقت تطلع «مدعومة» بدل «مفيش عليها ولا تركيبة». الأوتلاندر ٢٠٢٦ مثلًا ماشية على ملف نيسان إكستريل — الصفحة بقت تقول كده وتقولك الملف اللي تبدأ منه، لأن الدليل هو الأجهزة الشغّالة مش اسم الملف.",
+     "A vehicle with no file of its own that is nevertheless fitted on another vehicle's file now reads \"supported\" instead of \"never installed on anything\". A 2026 Outlander runs on the Nissan X-Trail file \u2014 the page now says so, and names the file to start from, because the proof is the working devices and not the name on the file."],
+  ]},
   {v:"2.6", d:"2026-08-10", items:[
     ["صور التركيب بقت على درايف الشركة بدل ما تبقى على جهازك: تسجّل دخول جوجل مرة واحدة، وأي صورة ترفعها بتتحط في فولدر «صور التركيبات» بلينك يفتح لأي حد. كل صورة شايلة معاها الماركة والموديل والسنة، فالبحث بيرجّعها من الدرايف نفسه من غير قاعدة بيانات.",
      "Fitting photos now live on the company Drive instead of your own device: sign in with Google once, and every photo lands in a \"\u0635\u0648\u0631 \u0627\u0644\u062a\u0631\u0643\u064a\u0628\u0627\u062a\" folder with a link anyone can open. Each file carries its make, model and year, so the search reads the index straight from Drive \u2014 no database anywhere."],
@@ -689,6 +699,16 @@ const STR = {
   say:        ["اللي تقوله للعميل", "What to tell the customer"],
   sayOk:      ["مدعومة ومجرّبة في أسطولنا — بنقرا منها {s} وغيرهم.",
                "Supported and proven in our own fleet — we read {s} and more from it."],
+  vCross:     ["مدعومة — بتتركب بملف عربية تانية",
+               "Supported \u2014 fitted using another vehicle's file"],
+  vCrossP:    ["ملهاش ملف باسمها، بس التركيبات الشغّالة كلها ماشية على {f}.",
+               "It has no file of its own, but the working installations all run on {f}."],
+  sayCross:   ["مدعومة ومركّبة عندنا فعلًا: {n} جهاز شغّالين بملف {f} — الملف باسم عربية تانية بس هو اللي بيشتغل عليها.",
+               "Supported and already fitted here: {n} devices run on the {f} file \u2014 it carries another vehicle's name, but it is the one that works on this car."],
+  nOnFile:    ["الملف المستخدم", "on this file"],
+  crossT:     ["متركبة تحت اسم تاني", "Fitted under another name"],
+  crossNote:  ["دي إعدادات مكتوب عليها العربية دي بالاسم، والأجهزة اللي شغّالة بيها محمّلة الملف ده. يعني حد جرب وعرف — ابدأ من نفس الملف.",
+               "These are configurations that name this vehicle, on devices carrying that file. Somebody already worked it out \u2014 start from the same file."],
   csT:        ["تحكم ذكي بالسيارة", "Car sharing support"],
   capLock:    ["تحكم: قفل/فتح الأبواب", "Control: lock / unlock"],
   shT:        ["صور التركيب", "Fitting photos"],
@@ -1097,12 +1117,17 @@ async function load(){
      connection the difference is whether somebody waits or gives up. */
   $("out").innerHTML = `<div class="verdict"><h2>${T("loading")}</h2></div>`;
   try{
-    const [v,cfg,fleet,meta] = await Promise.all(
-      ["vehicles","configs","fleet","meta"].map(n =>
+    const [v,cfg,fleet,meta,cross] = await Promise.all(
+      ["vehicles","configs","fleet","meta","crossfits"].map(n =>
         fetch("data/"+n+".json").then(r => {
-          if(!r.ok) throw new Error(n); return r.json(); })));
-    Object.assign(state,{v,cfg,fleet,meta});
+          // Crossfits arrived after the others; an older data folder
+          // simply has none, which is not a reason to fail the page.
+          if(!r.ok) return n === "crossfits" ? [] : Promise.reject(new Error(n));
+          return r.json(); }).catch(e => {
+            if(n === "crossfits") return []; throw e; })));
+    Object.assign(state,{v,cfg,fleet,meta,cross: cross || []});
     for(const x of state.cfg) x._h = fold(x.nm);
+    for(const x of state.cross) x._h = fold(x.nm);
     $("out").innerHTML = "";
     buildMakes(); paint();
   }catch(e){
@@ -1128,6 +1153,27 @@ function modelsOf(mk){
   }
   return [...m.keys()].sort().map(k => ({value:k, label:k, count:m.get(k) || ""}));
 }
+/* Devices fitted on somebody else's file, found by the name a human
+   typed on them. The catalogue says the file is a NISSAN X-TRAIL; the
+   configuration says the car is an Outlander; the device says it works.
+   The device wins -- that is this tool's whole rule. */
+function crossFor(mk, md){
+  const want = terms(md + " " + mk).filter(w => w.length > 2);
+  if(!want.length || !state.cross) return [];
+  const model = terms(md).filter(w => w.length > 2);
+  if(!model.length) return [];
+  const hit = state.cross.filter(c =>
+    model.every(w => c._h.includes(w)));
+  const byFile = new Map();
+  for(const c of hit){
+    const at = byFile.get(c.i) || {i: c.i, fl: c.fl, n: 0, a: 0, names: []};
+    at.n += c.n; at.a += (c.a || 0);
+    if(at.names.length < 3) at.names.push(c.nm);
+    byFile.set(c.i, at);
+  }
+  return [...byFile.values()].sort((x, y) => y.n - x.n);
+}
+
 function filesFor(mk, md){
   return state.v.filter(v => !v.g && v.mk === mk && (v.md || v.n) === md);
 }
@@ -1309,6 +1355,18 @@ function renderPick(){
   if(!mk || !md){ if(!state.free) $("out").innerHTML = ""; return; }
   const files = filesFor(mk, md);
   const v = verdict(files, yr ? +yr : null);
+  // Nothing of its own, but somebody is running it on another file: the
+  // honest answer is yes-with-a-file, not the "never installed" this
+  // used to print over twenty-five working installations.
+  const cross = crossFor(mk, md);
+  if(cross.length && !v.inYear.some(f => f.f)){
+    const top = cross[0], total = cross.reduce((s, c) => s + c.n, 0);
+    v.cls = "ok";
+    v.h = T("vCross");
+    v.p = T("vCrossP", {f: top.fl});
+    v.say = T("sayCross", {n: total, f: top.fl});
+    v.nums = [[total, T("nFitted")], [top.fl, T("nOnFile")]];
+  }
 
   const seeQ = encodeURIComponent([mk, md, yr].filter(Boolean).join(" "));
   let html = `<button class="back" id="back">&#8629; ${T("back")}</button>
@@ -1346,7 +1404,12 @@ function renderPick(){
     html += `<h3 class="sec">${T("widerFor",{y:yr})}</h3>
       <div class="list">${wider.map(fileRow).join("")}</div>
       <div class="note">${esc(T("widerNote",{y:yr}))}</div>`;
-  if(!v.inYear.some(f => f.f)) html += genericBlock(mk+" "+md);
+  if(cross.length) html += `<h3 class="sec">${T("crossT")}</h3>
+    <div class="list">${cross.map(c => `<div class="crow">
+      <b>${bdi(c.fl)}</b><span class="cn">${c.n} ${esc(T("nFitted"))}</span>
+      <i>${c.names.map(bdi).join(" \u00b7 ")}</i></div>`).join("")}</div>
+    <div class="note">${esc(T("crossNote"))}</div>`;
+  if(!v.inYear.some(f => f.f) && !cross.length) html += genericBlock(mk+" "+md);
   $("out").innerHTML = html;
   mountShots(mk, md, yr);
   syncCards();
