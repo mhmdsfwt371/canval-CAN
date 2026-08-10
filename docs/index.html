@@ -194,6 +194,18 @@ body{background:var(--paper);color:var(--ink);font-family:var(--sans);
   color:var(--muted);font-size:15px;line-height:1;padding:0 2px}
 .shdel:hover{color:var(--alert)}
 .shots .empty{font-size:13px;color:var(--muted);padding:10px 0}
+.shwarn:not(:empty){font-size:12.5px;color:var(--alert);margin-bottom:6px}
+.shnote{flex:1;min-width:0;border:0;background:none;color:var(--ink);
+  font-family:var(--sans);font-size:11.5px;padding:2px 0}
+.shnote::placeholder{color:var(--muted)}
+.shnote:focus{outline:0;border-bottom:1px solid var(--canl)}
+.shdel[data-armed="1"]{color:var(--alert);font-size:11px}
+/* Full size opens over the page: a new tab cannot be handed a data URL. */
+.shview{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.86);
+  display:flex;align-items:center;justify-content:center;padding:16px;
+  cursor:zoom-out}
+.shview[hidden]{display:none}
+.shview img{max-width:100%;max-height:100%;object-fit:contain}
 .pickhead{display:flex;align-items:center;gap:12px;margin:0 0 12px}
 .pickhead .pname{font-size:21px;font-weight:800;letter-spacing:.01em}
 .pickhead .pyr{font-family:var(--mono);color:var(--muted);font-size:14px}
@@ -463,7 +475,7 @@ const esc = s => (s ?? "").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;")
    the page may be Arabic, and only an isolate keeps them whole. */
 const bdi = s => `<bdi dir="${/[\u0600-\u06FF]/.test(s ?? "") ? "rtl" : "ltr"}">${esc(s)}</bdi>`;
 const THIS_YEAR = new Date().getFullYear();
-const VERSION = "2.4";
+const VERSION = "2.5";
 const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"ar"};
 
 /* What changed, and when. Kept beside the code rather than in a document
@@ -472,6 +484,10 @@ const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"a
    about. Newest first. The rule that goes with it: a new version adds,
    it does not quietly change what already worked. */
 const CHANGES = [
+  {v:"2.5", d:"2026-08-10", items:[
+    ["الصور بقى معاها سطر ملاحظة تكتب فيه مكان التوصيل — الصورة بتقول السلك راح فين والملاحظة بتقول أنهي سلك. والصورة بتفتح بحجمها الكامل فوق الصفحة، ومسح أي صورة بقى بضغطتين مش ضغطة، وأي صورة تفشل في الحفظ بتقول كده بدل ما تختفي في سكوت.",
+     "Photos now carry a note for where it connects \u2014 the photo says where the wire went, the note says which wire. Full size opens over the page, removing one takes two taps instead of one, and a photo that fails to save says so instead of vanishing quietly."],
+  ]},
   {v:"2.4", d:"2026-08-10", items:[
     ["صور التركيب: تحت اسم العربية بقى فيه مكان ترفع فيه صور التركيب من الموبايل، وتفضل محفوظة تلاقيها لما تدور على نفس الموديل تاني. الصورة بتتسجل بسنة الموديل، والسنة اللي بتدور عليها بتيجي الأول وليها إطار، والسنين التانية بتفضل ظاهرة ومكتوب عليها سنتها — تركيبة سنة قريبة غالبًا نفس التوصيل. (دلوقتي الصور محفوظة على جهازك أنت؛ المشاركة مع التيم الخطوة الجاية.)",
      "Fitting photos: under the vehicle name there is now a place to add photos from your phone, kept so you find them the next time you look up the same model. Each photo records its year; the year you asked for comes first and is outlined, other years stay visible and labelled \u2014 a nearby year is usually the same wiring. (For now photos live on your own device; sharing with the team is next.)"],
@@ -672,6 +688,10 @@ const STR = {
                "No photos for this model yet \u2014 the first one stays here for the next time you look."],
   shAny:      ["كل السنين", "Any year"],
   shDel:      ["امسح الصورة", "Remove"],
+  shSure:     ["أمسح؟", "Sure?"],
+  shNote:     ["اكتب مكان التوصيل…", "Where it connects\u2026"],
+  shLost:     ["{n} صورة ما اتحفظتش — يا إما المساحة خلصت يا إما الملف مش صورة.",
+               "{n} photo(s) were not saved \u2014 either the space ran out or the file was not an image."],
   shNo:       ["المتصفح ده مش بيحفظ صور — جرب متصفح تاني.",
                "This browser will not keep photos \u2014 try another one."],
   csLine:     ["التحكم في الأبواب مثبت فعلًا: {n} جهاز من الموديل ده شغال بسكربت قفل/فتح عن بُعد.",
@@ -1200,7 +1220,21 @@ function shotsShell(){
       <label class="shadd">${T("shAdd")}<input id="shin" type="file"
         accept="image/*" multiple hidden></label>
     </div>
-    <div class="shgrid" id="shgrid"></div></div>`;
+    <div class="shwarn" id="shwarn"></div>
+    <div class="shgrid" id="shgrid"></div>
+    <div class="shview" id="shview" hidden><img id="shviewimg" alt=""></div>
+    </div>`;
+}
+
+/* The photo says where the wire went; the note says which wire. Kept
+   short on purpose -- this is a label, not a report. Its own function so
+   the write-through is provable without a real text box. */
+async function saveNote(rows, id, text){
+  const r = (rows || []).find(x => x.id === id);
+  if(!r) return null;
+  r.note = String(text || "").trim().slice(0, 120);
+  await SHOTS.add(r);
+  return r;
 }
 
 async function mountShots(mk, md, yr){
@@ -1209,8 +1243,8 @@ async function mountShots(mk, md, yr){
   if(!SHOTS.ready()){ grid.innerHTML = `<div class="empty">${T("shNo")}</div>`; return; }
   const car = shotCar(mk, md);
 
+  let rows = [];
   const paint = async () => {
-    let rows = [];
     try { rows = await SHOTS.list(car); }
     catch(e){ grid.innerHTML = `<div class="empty">${T("shNo")}</div>`; return; }
     const n = document.getElementById("shn");
@@ -1223,32 +1257,61 @@ async function mountShots(mk, md, yr){
     grid.innerHTML = rows.map(r => `<figure class="shot"${
       yr && r.yr == yr ? ' data-hit="1"' : ""}>
       <img src="${r.src}" alt="" loading="lazy">
-      <figcaption><span class="shy">${esc(r.yr || T("shAny"))}</span>${
-        r.note ? esc(r.note) : ""}<button class="shdel" data-id="${
-        esc(r.id)}" title="${T("shDel")}">\u00d7</button></figcaption>
+      <figcaption><span class="shy">${esc(r.yr || T("shAny"))}</span>
+        <input class="shnote" data-id="${esc(r.id)}" maxlength="120"
+          value="${esc(r.note || "")}" placeholder="${T("shNote")}">
+        <button class="shdel" data-id="${esc(r.id)}"
+          title="${T("shDel")}">\u00d7</button></figcaption>
     </figure>`).join("");
+  };
+
+  grid.onchange = e => {
+    const box = e.target.closest(".shnote");
+    if(box) saveNote(rows, box.dataset.id, box.value);
   };
 
   grid.onclick = async e => {
     const del = e.target.closest(".shdel");
-    if(del){ await SHOTS.del(del.dataset.id); paint(); return; }
+    if(del){
+      // A fitting photo is somebody's afternoon in a workshop. One tap
+      // arms it, the second removes it; anything else disarms.
+      if(del.dataset.armed !== "1"){
+        grid.querySelectorAll(".shdel[data-armed]").forEach(b => {
+          b.dataset.armed = ""; b.textContent = "\u00d7"; });
+        del.dataset.armed = "1";
+        del.textContent = T("shSure");
+        return;
+      }
+      await SHOTS.del(del.dataset.id); paint(); return;
+    }
     const img = e.target.closest(".shot img");
-    if(img) window.open(img.src, "_blank");
+    // Browsers refuse to open a data: URL in a new tab, so it opens here.
+    if(img){
+      const box = document.getElementById("shview");
+      const big = document.getElementById("shviewimg");
+      if(box && big){ big.src = img.src; box.hidden = false; }
+    }
   };
+
+  const view = document.getElementById("shview");
+  if(view) view.onclick = () => { view.hidden = true; };
 
   const input = document.getElementById("shin");
   if(input) input.onchange = async () => {
     const files = [...(input.files || [])];
     input.value = "";
+    let lost = 0;
     for(const f of files){
       try {
         const shot = await shrink(f);
         await SHOTS.add({
           id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           car, mk, md, yr: yr ? +yr : null, note: "", at: Date.now(), ...shot});
-      } catch(err){ /* one bad file must not lose the rest */ }
+      } catch(err){ lost++; }        // one bad file must not lose the rest
     }
-    paint();
+    await paint();
+    const say = document.getElementById("shwarn");
+    if(say) say.textContent = lost ? T("shLost", {n: lost}) : "";
   };
   paint();
 }

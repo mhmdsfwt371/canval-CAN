@@ -160,9 +160,20 @@ const run = `
   check("other years are kept",        g.includes("2019"), true);
   check("the note rides with it",      g.includes("OBD pin 6"), true);
   check("the count is on the header",  store["shn"].textContent, "2");
+  check("the note has a box to live in", g.includes('class="shnote"'), true);
+
+  // The note is why the photo is worth keeping, so prove it survives.
+  let saved = null;
+  SHOTS.add = async r => { saved = r; return r; };
+  const back = await saveNote(mem, "b", "  CAN on OBD pins 6 and 14  ");
+  check("the note is written through", saved && saved.id, "b");
+  check("and trimmed on the way",      back.note, "CAN on OBD pins 6 and 14");
+  check("a note for nothing saves nothing", await saveNote(mem, "zz", "x"), null);
+
   await SHOTS.del("a");
   await mountShots("ACME", "TRUCK", 2024);
   check("removing one leaves the rest", store["shn"].textContent, "1");
+  check("the note came back with it",   store["shgrid"].innerHTML.includes("OBD pins 6 and 14"), true);
 
   check("slug handles spaced names",  logoSlug("LAND ROVER"), "land-rover");
   check("cards carry a logo cell",    store["cards"].innerHTML.includes('class="lg'), true);
