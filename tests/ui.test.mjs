@@ -192,6 +192,22 @@ const run = `
   check("and carries the file",    crossFor("BETA", "WAGON")[0].fl, "ACME TRUCK");
   check("a stranger finds none",   crossFor("ACME", "TRUCK").length, 0);
 
+  // -- MODEL, MODEL V1, MODEL v2: the catalogue's revisions, one car ---
+  // Sixty-nine devices were hidden behind these names -- forty-one of
+  // them on HIACE v2 while the HIACE page counted only its own.
+  check("a version tail folds",       baseModel("OUTLANDER V2"), "OUTLANDER");
+  check("lower case too",             baseModel("HIACE v2"),     "HIACE");
+  check("a dotted version folds",     baseModel("SPREADER V1.44"), "SPREADER");
+  check("a bare model is untouched",  baseModel("OUTLANDER"),    "OUTLANDER");
+  // The half of this that matters: a trim is not a version.
+  check("a trim is not a version",    baseModel("MUSTANG GT"),   "MUSTANG GT");
+  check("nor is TYPE R",              baseModel("CIVIC TYPE R"), "CIVIC TYPE R");
+  // GOLF V is a car. Its V must survive being followed by a version.
+  check("the model's own V survives", baseModel("GOLF V V0"),    "GOLF V");
+  check("and alone",                  baseModel("GOLF V"),       "GOLF V");
+  // A model actually called V2 must not be eaten down to nothing.
+  check("a model named V2 stands",    baseModel("V2"),           "V2");
+
   check("slug handles spaced names",  logoSlug("LAND ROVER"), "land-rover");
   check("cards carry a logo cell",    store["cards"].innerHTML.includes('class="lg'), true);
   check("cards carry the fallback",   store["cards"].innerHTML.includes('class="mono"'), true);

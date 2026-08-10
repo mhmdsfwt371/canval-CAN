@@ -487,7 +487,7 @@ const esc = s => (s ?? "").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;")
    the page may be Arabic, and only an isolate keeps them whole. */
 const bdi = s => `<bdi dir="${/[\u0600-\u06FF]/.test(s ?? "") ? "rtl" : "ltr"}">${esc(s)}</bdi>`;
 const THIS_YEAR = new Date().getFullYear();
-const VERSION = "3.5";
+const VERSION = "3.6";
 const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"ar"};
 
 /* What changed, and when. Kept beside the code rather than in a document
@@ -716,6 +716,8 @@ const STR = {
                "The card above counts the whole file: {t} devices on {f} across every vehicle running it. {n} of them are on the vehicle you asked about. Open \u201csignals\u201d for the devices and their readings."],
   csCross:    ["التحكم في الأبواب شغال على الملف اللي العربية دي ماشية عليه: {n} من {t} جهاز على {f} عليهم سكربت قفل/فتح عن بُعد.",
                "Door control is fitted on the file this vehicle runs on: {n} of {t} devices on {f} carry a remote lock/unlock script."],
+  alsoCross:  ["وكمان {n} جهاز متركّبين على ملف {f} تحت اسم العربية دي — تحت.",
+               "Another {n} devices are fitted under this vehicle's name on the {f} file \u2014 below."],
   csT:        ["تحكم ذكي بالسيارة", "Car sharing support"],
   capLock:    ["تحكم: قفل/فتح الأبواب", "Control: lock / unlock"],
   shT:        ["صور التركيب", "Fitting photos"],
@@ -1262,8 +1264,19 @@ function crossFor(mk, md){
   return [...byFile.values()].sort((x, y) => y.n - x.n);
 }
 
+/* MODEL, MODEL V1, MODEL v2 -- the catalogue numbers its revisions in
+   the model name, and they are one car. Only a version-shaped tail
+   counts: OUTLANDER V2 folds into OUTLANDER, while CIVIC TYPE R stays
+   its own vehicle because "TYPE R" is not a version. */
+const VERTAIL = /^(.*?)[ _-]+(?:V\d+(?:\.\d+)?|MK\d+|GEN\d+)$/i;
+const baseModel = md => {
+  const m = VERTAIL.exec(md || "");
+  return m && m[1].trim() ? m[1].trim() : (md || "");
+};
 function filesFor(mk, md){
-  return state.v.filter(v => !v.g && v.mk === mk && (v.md || v.n) === md);
+  const want = fold(baseModel(md));
+  return state.v.filter(v => !v.g && v.mk === mk
+    && fold(baseModel(v.md || v.n)) === want);
 }
 function yearsOf(files){
   const y = new Set();
@@ -1448,6 +1461,14 @@ function renderPick(){
   // honest answer is yes-with-a-file, not the "never installed" this
   // used to print over twenty-five working installations.
   const cross = crossFor(mk, md);
+  /* Installs of its own and installs under another vehicle's name are
+     both real, and the page used to show whichever came first. When
+     there is something of its own the verdict stays its own -- adding a
+     line so the crossings below are not read as a separate car. */
+  if(cross.length && v.inYear.some(f => f.f)){
+    const top = cross[0], total = cross.reduce((s, c) => s + c.n, 0);
+    v.p = (v.p ? v.p + " " : "") + T("alsoCross", {n: total, f: top.fl});
+  }
   if(cross.length && !v.inYear.some(f => f.f)){
     /* Every fact on this page hangs off a file: the readings, the lock
        scripts, whether anything is reporting at all. A car fitted on
