@@ -486,7 +486,7 @@ const esc = s => (s ?? "").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;")
    the page may be Arabic, and only an isolate keeps them whole. */
 const bdi = s => `<bdi dir="${/[\u0600-\u06FF]/.test(s ?? "") ? "rtl" : "ltr"}">${esc(s)}</bdi>`;
 const THIS_YEAR = new Date().getFullYear();
-const VERSION = "3.0";
+const VERSION = "3.1";
 const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"ar"};
 
 /* What changed, and when. Kept beside the code rather than in a document
@@ -922,20 +922,32 @@ const DRIVE = (() => {
   const SCOPE = "https://www.googleapis.com/auth/drive.file";
   let token = null, folder = null, client = null, resumed = false;
 
-  /* A sales person looks up one car, refreshes, looks up the next. The
-     token used to live in this variable alone, so every refresh wiped it
-     and put a sign-in dialog in the way -- the fastest way to build a
-     tool nobody opens. Two things keep them out of it now: the token is
-     kept for the life of the tab, and when it is gone the page asks
-     Google again without a prompt, which answers silently while the
-     grant stands.
+  /* Sign in once on this device, and stay signed in.
 
-     sessionStorage, not localStorage: it dies with the tab, and the
-     token it holds reaches only files this page made. */
+     Three things carry that, because no one of them is enough. Google
+     hands out an access token good for about an hour, and nothing
+     longer that a page without a server may hold.
+
+       - localStorage, so the token survives the tab closing. This was
+         sessionStorage, which dies with the tab: on a phone, leaving
+         the app and coming back meant signing in again.
+       - a silent renewal when the hour is up: the page asks Google with
+         no prompt, and while the grant stands the answer arrives with
+         nothing on screen.
+       - the account is remembered and passed back as a hint, so if the
+         silent path is ever blocked -- Safari and private windows shut
+         out the third-party cookies it leans on -- what appears is one
+         tap on a named account rather than a chooser and a consent
+         screen.
+
+     The token reaches only files this page created, which is what makes
+     keeping it on the device a fair trade for not asking a salesperson
+     to sign in between two lookups. */
   const KEY = "canval.drive.tok";
+  const WHO = "canval.drive.who";
   const cached = () => {
     try{
-      const c = JSON.parse(sessionStorage.getItem(KEY) || "null");
+      const c = JSON.parse(localStorage.getItem(KEY) || "null");
       // A minute of margin, so a token cannot expire mid-upload.
       if(c && c.t && c.exp > Date.now() + 60000) return (token = c.t);
     }catch(e){ /* storage blocked -- carry on without it */ }
@@ -944,14 +956,25 @@ const DRIVE = (() => {
   const keep = (t, secs) => {
     token = t;
     try{
-      sessionStorage.setItem(KEY, JSON.stringify(
+      localStorage.setItem(KEY, JSON.stringify(
         {t, exp: Date.now() + (secs > 0 ? secs : 3600) * 1000}));
     }catch(e){ /* nothing to do; the tab still holds it in memory */ }
     return t;
   };
   const forget = () => {
     token = null;
-    try{ sessionStorage.removeItem(KEY); }catch(e){}
+    try{ localStorage.removeItem(KEY); }catch(e){}
+  };
+  const who = () => { try{ return localStorage.getItem(WHO) || ""; }
+                      catch(e){ return ""; } };
+  // Drive answers this with the drive.file scope alone, so remembering
+  // the account costs no extra permission.
+  const remember = async () => {
+    try{
+      const a = await call("/about?fields=user(emailAddress)");
+      const m = a && a.user && a.user.emailAddress;
+      if(m) localStorage.setItem(WHO, m);
+    }catch(e){ /* a hint is a convenience, never a requirement */ }
   };
 
   const ask = (prompt) => gis().then(() => new Promise((res, rej) => {
@@ -965,7 +988,11 @@ const DRIVE = (() => {
     // at all. Without it the promise never settles and the button sticks
     // on "signing in" forever.
     client.error_callback = e => rej(new Error((e && e.type) || "blocked"));
-    client.requestAccessToken({prompt});
+    const req = {prompt};
+    // Naming the account is what turns a re-appearance of this dialog
+    // from "which of your five accounts" into a single tap.
+    if(who()) req.hint = who();
+    client.requestAccessToken(req);
   }));
 
   const gis = () => new Promise((res, rej) => {
@@ -1016,7 +1043,11 @@ const DRIVE = (() => {
     },
     /* The loud door, behind the button, reached only when the quiet one
        came back empty. */
-    async signIn(){ return ask("consent"); },
+    async signIn(){
+      const t = await ask("consent");
+      await remember();
+      return t;
+    },
     async list(car){
       if(!token) return [];
       const fid = await folderId();
