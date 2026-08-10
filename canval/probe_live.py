@@ -74,20 +74,53 @@ def token_state(token: str) -> tuple[bool, str]:
     return True, f"token valid until {when} ({left // 86400} days left)"
 
 
-def pick_sample(conn, per_file: int) -> dict[int, list[str]]:
-    """A few devices per file, the most recently active first.
+def pick_sample(conn, per_file: int) -> dict[int, dict[str, str]]:
+    """A few devices per file, spread across the vehicles sharing it.
 
-    Recently active because a device that has not spoken in a year tells
-    us nothing about the file, and would waste the sample slot.
+    Recently active first, because a device that has not spoken in a
+    year tells us nothing about the file and would waste the slot.
+
+    Spread across configuration names, because a file is rarely one
+    vehicle's. Sixty-eight files here are shared by more than six, and a
+    car fitted under another vehicle's file reads all its evidence from
+    that file -- so a sample taken purely by recency filled every slot
+    from whichever vehicle happened to have the busiest devices, and the
+    borrower's page showed a stranger's plates. One device from each
+    vehicle first, then the rest by recency.
+
+    Returns imei -> configuration name, so what comes back can be shown
+    against the vehicle it belongs to.
     """
-    by_file: dict[int, list[str]] = defaultdict(list)
+    per_cfg: dict[int, dict[str, list[str]]] = defaultdict(
+        lambda: defaultdict(list))
+    names: dict[str, str] = {}
     for row in conn.execute(
-            """SELECT file_id, imei FROM device_can
+            """SELECT file_id, imei, COALESCE(config_name, '') cfg
+                 FROM device_can
                 WHERE file_id IS NOT NULL
                 ORDER BY file_id, COALESCE(last_activity, 0) DESC"""):
-        slot = by_file[row["file_id"]]
-        if len(slot) < per_file and row["imei"] not in slot:
+        slot = per_cfg[row["file_id"]][row["cfg"]]
+        if row["imei"] not in slot:
             slot.append(row["imei"])
+            names[row["imei"]] = row["cfg"]
+
+    by_file: dict[int, dict[str, str]] = {}
+    for fid, groups in per_cfg.items():
+        # Round by round: the best device from each vehicle, then the
+        # next best from each, until the slots run out. The groups are
+        # already in recency order, so a file with one vehicle behaves
+        # exactly as it did before.
+        picked: list[str] = []
+        deepest = max(len(v) for v in groups.values())
+        for depth in range(deepest):
+            for cfg in groups:
+                if len(picked) >= per_file:
+                    break
+                if depth < len(groups[cfg]):
+                    picked.append(groups[cfg][depth])
+            if len(picked) >= per_file:
+                break
+        by_file[fid] = {i: names[i] for i in picked}
     return by_file
 
 
@@ -236,7 +269,8 @@ def main(argv=None) -> int:
                       f"{len(views)} found")
 
         rows = 0
-        for file_id, imeis in by_file.items():
+        for file_id, cfg_of in by_file.items():
+            imeis = list(cfg_of)
             answered = [views[i] for i in imeis if i in views]
             tally: dict[str, int] = defaultdict(int)
             reporting = 0
@@ -252,6 +286,10 @@ def main(argv=None) -> int:
                 devices.append({
                     "i": str(view.imei or ""),
                     "u": view.name or "",
+                    # The configuration this device carries. A shared file
+                    # answers for several vehicles, and without this the
+                    # page cannot tell which of them a device belongs to.
+                    "c": cfg_of.get(str(view.imei or ""), ""),
                     # Who the device belongs to, so a lead can be taken to
                     # the right customer without a second lookup. The
                     # platform returns these as plain strings alongside the
@@ -278,7 +316,7 @@ def main(argv=None) -> int:
                 (file_id, len(imeis), len(answered), reporting,
                  json.dumps(dict(sorted(tally.items(), key=lambda kv: -kv[1])),
                             ensure_ascii=False),
-                 json.dumps(devices[:3], ensure_ascii=False)))
+                 json.dumps(devices[:8], ensure_ascii=False)))
             rows += 1
 
         live = conn.execute(

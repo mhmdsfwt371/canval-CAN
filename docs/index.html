@@ -256,6 +256,7 @@ h3.sec b{color:var(--ink)}
 .t,.d,.ev,.why,.num,.opt,.row span,.s,.dev{unicode-bidi:isolate}
 bdi{unicode-bidi:isolate}
 .li .nm .d{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:1px}
+.dcfg{font-family:var(--mono);font-size:11px;color:var(--muted);opacity:.85}
 .lvl{font-family:var(--mono);font-size:11.5px;margin-top:2px}
 .lvl.ok{color:var(--canl)}
 .lvl.no{color:var(--alert)}
@@ -486,7 +487,7 @@ const esc = s => (s ?? "").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;")
    the page may be Arabic, and only an isolate keeps them whole. */
 const bdi = s => `<bdi dir="${/[\u0600-\u06FF]/.test(s ?? "") ? "rtl" : "ltr"}">${esc(s)}</bdi>`;
 const THIS_YEAR = new Date().getFullYear();
-const VERSION = "3.4";
+const VERSION = "3.5";
 const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"ar"};
 
 /* What changed, and when. Kept beside the code rather than in a document
@@ -1438,6 +1439,7 @@ function splitByFit(files, year){
 }
 
 function renderPick(){
+  state.mine = null;
   const {mk, md, yr} = state.pick || {};
   if(!mk || !md){ if(!state.free) $("out").innerHTML = ""; return; }
   const files = filesFor(mk, md);
@@ -1521,6 +1523,10 @@ function renderPick(){
 
   const [best, wider] = splitByFit(v.inYear, yr ? +yr : null);
   const ownNone = !v.inYear.some(f => f.f);
+  // Whose devices to put first on a shared file's card. The file
+  // answers for several vehicles; the one being asked about should not
+  // have to read past somebody else's plates to find its own.
+  state.mine = new Set(cross.map(c => c.nm));
   const crossHtml = cross.length ? `<h3 class="sec">${T("crossT")}</h3>
     <div class="list">${cross.map(c => {
       const f = state.v.find(x => x.i === c.i);
@@ -1908,13 +1914,24 @@ function detail(f){
        <div class="decl" hidden><div class="why">${T("declWhy")}</div>${declBlock}</div>`
     : declBlock;
 
-  const devs = (f.lv && f.lv.d) || [];
+  /* A shared file carries devices from every vehicle on it. Sorted by
+     recency alone, the Outlander's page opened on three sets of X-TRAIL
+     plates -- true about the file, useless as proof about the car the
+     question was asked about. The vehicle being asked about goes first;
+     everything else keeps its order behind. */
+  let devs = (f.lv && f.lv.d) || [];
+  const mine = state.mine;
+  if(mine && mine.size)
+    devs = [...devs].sort((a, b) =>
+      (mine.has(b.c) ? 1 : 0) - (mine.has(a.c) ? 1 : 0));
+  devs = devs.slice(0, 3);
   html += `<div class="dh">${T("devHead")}</div>`;
   html += devs.length ? devs.map(d => `<div class="dev">
       <div class="dhead">
         <span class="imei">${esc(d.i)}</span>
         ${d.u ? `<span class="unit">${bdi(d.u)}</span>` : ""}
         <span class="when">${esc(since(d.t))}</span>
+        ${d.c ? `<span class="dcfg">${bdi(d.c)}</span>` : ""}
       </div>
       ${(d.o || d.cb) ? `<div class="dwho">
         ${d.o ? `<span>${T("owner")}: <b>${bdi(d.o)}</b></span>` : ""}
