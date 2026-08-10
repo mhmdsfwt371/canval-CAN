@@ -110,6 +110,27 @@ CREATE TABLE IF NOT EXISTS device_can (
     seen_at       TEXT DEFAULT (datetime('now')),
     PRIMARY KEY (imei, bus)
 );
+
+-- One row per device PER SCRIPT SLOT. A device carries up to three, and
+-- every slot's element is called plain "Script", so this key is the same
+-- lesson (imei, bus) taught: key by the position, never by the name.
+-- The "(none)" slot marks a device that was read and had no script at
+-- all -- absence recorded is not the same as never asked.
+CREATE TABLE IF NOT EXISTS device_script (
+    imei         TEXT NOT NULL,
+    slot         TEXT NOT NULL,      -- Script1 / Script2 / Script3 / (none)
+    element_id   INTEGER,
+    script_id    INTEGER,            -- when the stored value is numeric
+    raw_value    TEXT,
+    script_name  TEXT,               -- resolved from the catalogue, or the
+                                     -- raw value itself when non-numeric
+    inherited    INTEGER,            -- 1 = from the template, 0 = set here
+    hardware     TEXT,
+    config_name  TEXT,
+    template_id  INTEGER,
+    seen_at      TEXT DEFAULT (datetime('now')),
+    PRIMARY KEY (imei, slot)
+);
 CREATE INDEX IF NOT EXISTS ix_dc_file ON device_can(file_id);
 CREATE INDEX IF NOT EXISTS ix_dc_imei ON device_can(imei);
 
@@ -349,6 +370,7 @@ def clear_device(conn, imei: str) -> None:
     Without this a device that loses a bus keeps the stale row forever.
     """
     conn.execute("DELETE FROM device_can WHERE imei=?", (imei,))
+    conn.execute("DELETE FROM device_script WHERE imei=?", (imei,))
 
 
 def log_sweep(conn, imei: str, status: str, detail: str | None = None):
@@ -1042,3 +1064,25 @@ def coverage_detail(conn) -> dict:
         "dual_bus_devices": dual,
         "pointing_at_missing_file": orphan,
     }
+
+
+def record_device_script(conn, imei: str, slot: str, *, element_id=None,
+                         script_id=None, raw_value=None, script_name=None,
+                         inherited=None, hardware=None, config_name=None,
+                         template_id=None) -> None:
+    """Record one script slot of one device. Slot "(none)" means the
+    device was read and carries no script anywhere."""
+    conn.execute(
+        """INSERT INTO device_script
+           (imei, slot, element_id, script_id, raw_value, script_name,
+            inherited, hardware, config_name, template_id, seen_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?, datetime('now'))
+           ON CONFLICT(imei, slot) DO UPDATE SET
+             element_id=excluded.element_id, script_id=excluded.script_id,
+             raw_value=excluded.raw_value, script_name=excluded.script_name,
+             inherited=excluded.inherited, hardware=excluded.hardware,
+             config_name=excluded.config_name,
+             template_id=excluded.template_id, seen_at=datetime('now')""",
+        (imei, slot or "(none)", element_id, script_id, raw_value,
+         script_name, inherited, hardware, config_name, template_id),
+    )

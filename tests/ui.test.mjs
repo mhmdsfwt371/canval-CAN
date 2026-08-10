@@ -39,6 +39,7 @@ const fixtures = {
   "vehicles.json": [
     { i:1, n:"ACME TRUCK", mk:"ACME", md:"TRUCK", y0:2019, y1:null, b:1,
       f:6, a:0, c:2, s:["Fuel Level","RPM"], x:["Trunk Open"],
+      sc:{n:5, s:["Lock_Unlock_Outputs_Registration Unified V2_1"]},
       lv:{ n:6, k:3, r:2, t:1754500000,
            s:[{n:"Fuel Level", v:"41", u:"%", t:1754500000},
               {n:"RPM", t:0}],
@@ -121,6 +122,13 @@ const run = `
   state.pick = {mk:"ACME"}; state.models = modelsOf("ACME"); cMdPick("TRUCK");
   check("share text names the vehicle",       (state.shareText||"").includes("ACME TRUCK"), true);
   check("share text carries the link",        (state.shareText||"").includes("https://"), true);
+
+  // -- car sharing rides on a proven lock script, or stays silent -----
+  check("verdict carries the lock proof",   verdict(state.v.filter(x => x.i === 1), null).cs.n, 5);
+  check("no script, no claim",              !verdict(state.v.filter(x => x.i === 2), null).cs, true);
+  check("answer shows the car-share line",  store["out"].innerHTML.includes('say cshare'), true);
+  check("the script is named, not implied", store["out"].innerHTML.includes("Lock_Unlock"), true);
+  check("share text carries the lock line", (state.shareText||"").includes(T("csShare",{n:5})), true);
 
   // -- every make has a face, every answer a look link ----------------
   check("slug handles spaced names",  logoSlug("LAND ROVER"), "land-rover");

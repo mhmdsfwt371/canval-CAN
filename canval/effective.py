@@ -136,7 +136,8 @@ import json
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from .store import clear_device, connect, log_sweep, record_device_bus
+from .store import (clear_device, connect, log_sweep, record_device_bus,
+                    record_device_script)
 
 BUS_NAMES = ("CAN1", "CAN2")
 _ROOT = "/api/external/v3/settingsOverrides"
@@ -161,6 +162,7 @@ CREATE TABLE IF NOT EXISTS template_map (
     has_can     INTEGER NOT NULL,
     branches    TEXT,               -- what the Hardware category really held
     reader      TEXT,               -- which reader version concluded this
+    script_map  TEXT,               -- {"Script1": [cat, group, element]}
     walked_at   TEXT DEFAULT (datetime('now'))
 );
 """
@@ -287,6 +289,97 @@ def _groups_under(client, uid, category_id, depth=0, max_depth=3):
         yield from _groups_under(client, uid, sub["id"], depth + 1, max_depth)
 
 
+# Where XDM might list the scripts catalogue. Nobody documented it, so the
+# sweep tries these in order and keeps whichever answers JSON with rows --
+# and says which one won, so the guessing only ever happens once.
+_SCRIPT_CATALOGUE_PATHS = (
+    "/api/external/v3/scripts/filter",
+    "/api/external/v1/scripts/filter",
+    "/api/external/v3/scripts",
+    "/api/external/v2/scripts/filter",
+    "/api/external/v3/scriptfiles/filter",
+)
+
+
+def load_script_catalogue(client, stats, notice=None):
+    """script id -> script name, from the first endpoint that behaves.
+
+    Returns {} when none of them do. That is a survivable outcome: the
+    sweep still stores the ids, the names arrive whenever the right path
+    is learned, and nothing false was written in the meantime.
+    """
+    for path in _SCRIPT_CATALOGUE_PATHS:
+        rows, first = [], 0
+        try:
+            while True:
+                page = client._request(
+                    "GET", path,
+                    params={"FirstRecord": first, "ItemsPerPage": 200}) or {}
+                results = (page if isinstance(page, list)
+                           else page.get("results") or page.get("items") or [])
+                if not isinstance(results, list) or not results:
+                    break
+                rows += results
+                total = ((page.get("paginator") or {}).get("recordCount")
+                         if isinstance(page, dict) else None)
+                first += len(results)
+                if isinstance(page, list) or len(rows) >= 5000 or (
+                        total is not None and len(rows) >= total):
+                    break
+        except Exception:                               # noqa: BLE001
+            continue
+        found = {}
+        for r in rows:
+            if not isinstance(r, dict):
+                continue
+            rid = r.get("id", r.get("scriptId"))
+            name = (r.get("name") or r.get("title") or r.get("fileName")
+                    or r.get("scriptName"))
+            if rid is not None and name:
+                found[str(rid)] = str(name)
+        if found:
+            stats["script_catalogue"] = {"endpoint": path, "scripts": len(found)}
+            if notice:
+                notice(f"    script catalogue: {path} -> {len(found)} names")
+            return found
+    stats["script_catalogue"] = None
+    return {}
+
+
+def _script_slots(client, uid, root):
+    """{"Script1": (cat, group, element)} -- the Script reference per slot.
+
+    A device carries up to three script slots and each slot's element is
+    just called "Script", so keying by element name would keep one of the
+    three and silently drop the rest -- the same trap, letter for letter,
+    that (imei, element_name) set for the two CAN buses. The slot is the
+    subcategory's own name, and where a template hangs its groups straight
+    under the category the group's name serves instead; the shape is not
+    assumed, for the same reason it is not assumed for CAN.
+    """
+    slots = {}
+    cat = next((c["id"] for c in root.get("categories") or []
+                if str(c.get("name") or "").strip().lower() == "script"), None)
+    if cat is None:
+        return slots
+    body = _get(client, f"{_ROOT}/{uid}/categories/{cat}") or {}
+    areas = [(str(s.get("name") or "").strip() or f"slot{k}", s["id"])
+             for k, s in enumerate(body.get("subCategories") or [], 1)]
+    if not areas:
+        areas = [(None, cat)]
+    for slot, area in areas:
+        for c_id, g_id in _groups_under(client, uid, area):
+            gb = _get(client, f"{_ROOT}/{uid}/categories/{c_id}"
+                              f"/elementGroups/{g_id}") or {}
+            gname = str(gb.get("name") or "").strip()
+            key = slot or gname or f"grp{g_id}"
+            for el in gb.get("userElements") or []:
+                if (str(el.get("name") or "").strip().lower() == "script"
+                        and key not in slots):
+                    slots[key] = (c_id, g_id, el["id"])
+    return slots
+
+
 def map_template(client, uid):
     """Find the CAN elements in the settings tree.
 
@@ -306,11 +399,13 @@ def map_template(client, uid):
     """
     found = {}
     root = _get(client, f"{_ROOT}/{uid}") or {}
+    slots = _script_slots(client, uid, root)
     names = [str(c.get("name")) for c in root.get("categories") or []]
     hardware = next((c["id"] for c in root.get("categories") or []
                      if str(c.get("name")) == "Hardware"), None)
     if hardware is None:
-        return found, [f"top-level: {', '.join(names)}"] if names else []
+        return (found,
+                [f"top-level: {', '.join(names)}"] if names else [], slots)
 
     branches = _get(client, f"{_ROOT}/{uid}/categories/{hardware}") or {}
     seen_branches = [str(b.get("name"))
@@ -327,7 +422,7 @@ def map_template(client, uid):
                 if key and key not in found.get(bus, {}):
                     found.setdefault(bus, {})[key] = (
                         cat_id, group_id, element["id"])
-    return found, seen_branches
+    return found, seen_branches, slots
 
 
 def _dropdown(element):
@@ -347,15 +442,23 @@ def load_maps(conn, max_age_days=30):
     port -- the difference between no interface and an empty one.
     """
     conn.executescript(_CACHE_DDL)
-    if "reader" not in {r[1] for r in conn.execute(
-            "PRAGMA table_info(template_map)")}:
+    have = {r[1] for r in conn.execute("PRAGMA table_info(template_map)")}
+    if "reader" not in have:
         conn.execute("ALTER TABLE template_map ADD COLUMN reader TEXT")
+    if "script_map" not in have:
+        conn.execute("ALTER TABLE template_map ADD COLUMN script_map TEXT")
+    # script_map IS NOT NULL is the staleness gate: a map walked before
+    # this reader knew scripts existed carries NULL there, gets excluded,
+    # and is walked once more -- the designed price of learning a new
+    # branch, paid per template rather than per device.
     rows = conn.execute(
-        "SELECT template_id, bus_map, has_can, branches FROM template_map "
+        "SELECT template_id, bus_map, has_can, branches, script_map "
+        "FROM template_map "
         "WHERE walked_at >= datetime('now', ?) "
-        "  AND (has_can = 1 OR reader = ?)",
+        "  AND (has_can = 1 OR reader = ?) "
+        "  AND script_map IS NOT NULL",
         (f"-{int(max_age_days)} days", READER)).fetchall()
-    out, ports = {}, {}
+    out, ports, slots = {}, {}, {}
     for r in rows:
         buses = json.loads(r["bus_map"])
         out[r["template_id"]] = {
@@ -363,7 +466,9 @@ def load_maps(conn, max_age_days=30):
             for bus, keys in buses.items()}
         ports[r["template_id"]] = bool(buses) or any(
             b in (r["branches"] or "") for b in BUS_NAMES)
-    return out, ports
+        slots[r["template_id"]] = {
+            s: tuple(v) for s, v in json.loads(r["script_map"] or "{}").items()}
+    return out, ports, slots
 
 
 def relabel_legacy(conn):
@@ -392,18 +497,19 @@ def relabel_legacy(conn):
     return moved, renamed
 
 
-def save_map(conn, template_id, buses, branches):
+def save_map(conn, template_id, buses, branches, slots=None):
     conn.execute(
         """INSERT INTO template_map (template_id, bus_map, has_can, branches,
-                                     reader, walked_at)
-           VALUES (?,?,?,?,?, datetime('now'))
+                                     reader, script_map, walked_at)
+           VALUES (?,?,?,?,?,?, datetime('now'))
            ON CONFLICT(template_id) DO UPDATE SET
              bus_map=excluded.bus_map, has_can=excluded.has_can,
              branches=excluded.branches, reader=excluded.reader,
-             walked_at=datetime('now')""",
+             script_map=excluded.script_map, walked_at=datetime('now')""",
         (template_id, json.dumps({b: {k: list(v) for k, v in keys.items()}
                                   for b, keys in buses.items()}),
-         1 if buses else 0, ", ".join(branches) or None, READER))
+         1 if buses else 0, ", ".join(branches) or None, READER,
+         json.dumps({s: list(v) for s, v in (slots or {}).items()})))
 
 
 def sweep_devices(client, db_path, hardware_ids=None, active_since_days=60,
@@ -428,6 +534,8 @@ def sweep_devices(client, db_path, hardware_ids=None, active_since_days=60,
         "templates": 0,
         "templates_from_cache": 0, "templates_walked": 0, "calls": 0,
         "with_can_file": 0, "bus_entries": 0, "multi_bus_devices": 0,
+        "script_entries": 0, "script_devices": 0, "lock_script_devices": 0,
+        "script_names_unresolved": 0, "script_catalogue": "not needed",
         "inherited_entries": 0, "overridden_entries": 0,
         "no_file_assigned": 0, "no_configuration": 0, "no_can_ports": 0,
         "relabelled_rows": 0, "reclassified_as_empty_port": 0,
@@ -440,7 +548,7 @@ def sweep_devices(client, db_path, hardware_ids=None, active_since_days=60,
     listed: list = []
 
     with connect(db_path) as conn:
-        trees, ports = load_maps(conn, map_max_age_days)
+        trees, ports, slot_maps = load_maps(conn, map_max_age_days)
         fixed, renamed = relabel_legacy(conn)
         stats["relabelled_rows"] = fixed + renamed
         stats["reclassified_as_empty_port"] = fixed
@@ -449,6 +557,11 @@ def sweep_devices(client, db_path, hardware_ids=None, active_since_days=60,
             fresh = {r["imei"]: r["config_name"] for r in conn.execute(
                 """SELECT imei, config_name, MAX(seen_at) FROM device_can
                     WHERE seen_at >= datetime('now', ?)
+                      -- a device read before scripts were collected has
+                      -- no script rows yet; it is not fresh, whatever its
+                      -- timestamp says, or the new column would fill only
+                      -- as reads happened to expire
+                      AND imei IN (SELECT DISTINCT imei FROM device_script)
                     GROUP BY imei""", (f"-{int(refresh_after_days)} days",))}
     stats["templates_from_cache"] = len(trees)
 
@@ -505,6 +618,9 @@ def sweep_devices(client, db_path, hardware_ids=None, active_since_days=60,
     labels: dict = {}       # CAN function value -> label
     seen: dict = {}         # imei -> (template_id, {element_id: value})
     resolved: dict = {}     # imei -> {bus: raw value}
+    script_names: dict = {} # script id (as string) -> script name
+    resolved_scripts: dict = {}     # imei -> {slot: raw value}
+    catalogue_loaded = False
     shapes: dict = {}       # template_id -> branch names, when no CAN found
     done = 0
 
@@ -550,17 +666,18 @@ def sweep_devices(client, db_path, hardware_ids=None, active_since_days=60,
                 for fut in as_completed(jobs):
                     tid = jobs[fut]
                     try:
-                        buses, branches = fut.result()
+                        buses, branches, sslots = fut.result()
                     except Exception:                   # noqa: BLE001
                         continue
-                    walked[tid] = (buses, branches)
+                    walked[tid] = (buses, branches, sslots)
             with connect(db_path) as conn:
-                for tid, (buses, branches) in walked.items():
+                for tid, (buses, branches, sslots) in walked.items():
                     trees[tid] = buses
+                    slot_maps[tid] = sslots
                     ports[tid] = bool(buses) or any(
                         b in branches for b in BUS_NAMES)
                     stats["templates_walked"] += 1
-                    save_map(conn, tid, buses, branches)
+                    save_map(conn, tid, buses, branches, sslots)
                     if not buses:
                         shapes[tid] = branches
 
@@ -586,6 +703,39 @@ def sweep_devices(client, db_path, hardware_ids=None, active_since_days=60,
                     defaults[(tid, bus, key)] = str(body.get("value") or "").strip()
                     if key == "func" and not labels:
                         labels.update(_dropdown(body))
+            for slot, where in (slot_maps.get(tid) or {}).items():
+                if (tid, "script", slot) in defaults:
+                    continue
+                element = where[2]
+                donor = next((i for i, o in members[tid]
+                              if element not in o), None)
+                if donor is None:
+                    continue
+                body = read_element(api, donor, where)
+                if body is None:
+                    continue
+                defaults[(tid, "script", slot)] = str(
+                    body.get("value") or "").strip()
+                # When the element is a dropdown its options are the whole
+                # catalogue, id and name together, already paid for.
+                script_names.update(_dropdown(body))
+
+        # The catalogue is only worth fetching if some device actually
+        # carries a numeric script id whose name is still unknown.
+        if not catalogue_loaded:
+            pending = set()
+            for imei, (tid, overrides) in got.items():
+                for slot, where in (slot_maps.get(tid) or {}).items():
+                    raw = (overrides.get(where[2])
+                           if where[2] in overrides
+                           else defaults.get((tid, "script", slot)))
+                    raw = str(raw or "").strip()
+                    if raw.isdigit() and int(raw) > 0 and raw not in script_names:
+                        pending.add(raw)
+            if pending:
+                script_names.update(
+                    load_script_catalogue(api, stats, notice))
+                catalogue_loaded = True
 
         # -- resolve and store
         with connect(db_path) as conn:
@@ -639,6 +789,46 @@ def sweep_devices(client, db_path, hardware_ids=None, active_since_days=60,
                     stats["bus_entries"] += 1
                     stats["inherited_entries" if inherited
                           else "overridden_entries"] += 1
+
+                # -- scripts: recorded whatever the CAN outcome, because
+                #    the two answers are independent facts about the device
+                srows = 0
+                has_lock = False
+                resolved_scripts[imei] = {}
+                for slot, where in (slot_maps.get(tid) or {}).items():
+                    element = where[2]
+                    if element in overrides:
+                        raw, inh = overrides[element], 0
+                    else:
+                        raw, inh = defaults.get((tid, "script", slot)), 1
+                    raw = str(raw or "").strip()
+                    resolved_scripts[imei][slot] = raw
+                    if not raw or raw == "0":
+                        continue
+                    name = (script_names.get(raw) if raw.isdigit()
+                            else raw)
+                    if raw.isdigit() and name is None:
+                        stats["script_names_unresolved"] += 1
+                    record_device_script(
+                        conn, imei, slot, element_id=element,
+                        script_id=int(raw) if raw.isdigit() else None,
+                        raw_value=raw, script_name=name, inherited=inh,
+                        hardware=dev["hardware"], config_name=dev["config"],
+                        template_id=tid)
+                    srows += 1
+                    stats["script_entries"] += 1
+                    if name and "lock" in name.lower():
+                        has_lock = True
+                if srows:
+                    stats["script_devices"] += 1
+                    if has_lock:
+                        stats["lock_script_devices"] += 1
+                else:
+                    # The marker row is what lets the freshness gate tell
+                    # "read, and there was nothing" from "never read".
+                    record_device_script(
+                        conn, imei, "(none)", hardware=dev["hardware"],
+                        config_name=dev["config"], template_id=tid)
 
                 if written:
                     stats["with_can_file"] += 1
@@ -719,6 +909,23 @@ def sweep_devices(client, db_path, hardware_ids=None, active_since_days=60,
                         if len(stats["verify_problems"]) < 20:
                             stats["verify_problems"].append(
                                 f"{imei} {bus_name}: stored {ours!r}, "
+                                f"device reports {live!r} (template {tid})")
+                for slot, where in (slot_maps.get(tid) or {}).items():
+                    body = read_element(api, imei, where)
+                    if body is None:
+                        stats["verify_unreadable"] += 1
+                        continue
+                    # "" and "0" are the same statement -- no script here.
+                    norm = lambda x: "" if str(x).strip() in ("", "0") \
+                        else str(x).strip()                 # noqa: E731
+                    live = norm(body.get("value"))
+                    ours = norm((resolved_scripts.get(imei) or {}).get(slot))
+                    stats["verified"] += 1
+                    if live != ours:
+                        stats["verify_mismatches"] += 1
+                        if len(stats["verify_problems"]) < 20:
+                            stats["verify_problems"].append(
+                                f"{imei} {slot}: stored {ours!r}, "
                                 f"device reports {live!r} (template {tid})")
 
     return stats

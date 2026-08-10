@@ -152,6 +152,8 @@ body{background:var(--paper);color:var(--ink);font-family:var(--sans);
    analysis so it can be found without reading any of it. */
 .say{margin-top:11px;padding:9px 12px;background:var(--soft);
   border:1px dashed var(--line);border-radius:2px;font-size:14.5px}
+.csn{display:block;margin-top:5px;font-family:var(--mono);
+  font-size:10.5px;font-style:normal;color:var(--muted)}
 .lg{display:inline-flex;align-items:center;justify-content:center;
   width:26px;height:26px;flex:none;vertical-align:middle}
 .lg img{width:100%;height:100%;object-fit:contain}
@@ -433,7 +435,7 @@ const esc = s => (s ?? "").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;")
    the page may be Arabic, and only an isolate keeps them whole. */
 const bdi = s => `<bdi dir="${/[\u0600-\u06FF]/.test(s ?? "") ? "rtl" : "ltr"}">${esc(s)}</bdi>`;
 const THIS_YEAR = new Date().getFullYear();
-const VERSION = "2.1";
+const VERSION = "2.2";
 const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"ar"};
 
 /* What changed, and when. Kept beside the code rather than in a document
@@ -442,6 +444,10 @@ const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"a
    about. Newest first. The rule that goes with it: a new version adds,
    it does not quietly change what already worked. */
 const CHANGES = [
+  {v:"2.2", d:"2026-08-10", items:[
+    ["مشاركة المركبات: لو فيه أجهزة من الموديل شغّالة بسكربت قفل/فتح، النتيجة بتقول كده بالعدد وباسم السكربت نفسه، والجملة الجاهزة للعميل بتتوسع تلقائيًا. الدليل تركيبات حقيقية، مش وعد كتالوج.",
+     "Car sharing: when devices of the model run a lock/unlock script, the verdict says so \u2014 with the count and the script's own name \u2014 and the customer sentence grows to match. The proof is real installations, not a catalogue promise."],
+  ]},
   {v:"2.1", d:"2026-08-09", items:[
     ["إصلاح: اللوجو كان راكب على اسم الماركة في الكروت — اتنقل للركن المقابل للنص، فبيفضلوا متباعدين في العربي والإنجليزي.",
      "Fix: the logo sat on top of the make name in the cards \u2014 it moved to the corner opposite the text, so the two stay apart in Arabic and English alike."],
@@ -620,6 +626,11 @@ const STR = {
   say:        ["اللي تقوله للعميل", "What to tell the customer"],
   sayOk:      ["مدعومة ومجرّبة في أسطولنا — بنقرا منها {s} وغيرهم.",
                "Supported and proven in our own fleet — we read {s} and more from it."],
+  csT:        ["مشاركة المركبات", "Car sharing"],
+  csLine:     ["التحكم في الأبواب مثبت فعلًا: {n} جهاز من الموديل ده شغال بسكربت قفل/فتح — تنفع لمشاركة المركبات.",
+               "Door control is field-proven: {n} devices of this model run a lock/unlock script \u2014 car-sharing ready."],
+  csShare:    ["وتدعم كذلك القفل والفتح عن بُعد ({n} جهاز مثبت) — مناسبة لمشاركة المركبات.",
+               "Also does remote lock/unlock ({n} devices proven) \u2014 suitable for car sharing."],
   sayPend:    ["مدعومة والتركيبات شغّالة، وبنأكد قايمة الإشارات النهائية خلال يوم أو يومين.",
                "Supported and installed; the final signal list is confirmed within a day or two."],
   sayQuiet:   ["فيه تركيبات بس ساكتة من شهر — راجع R&D قبل أي وعد.",
@@ -931,6 +942,16 @@ function verdict(files, year){
   const active = inYear.reduce((s,f) => s+(f.a||0), 0);
   const cfgs   = inYear.reduce((s,f) => s+(f.c||0), 0);
   const lv     = liveOf(inYear);
+  /* Car sharing rests on a field fact: devices of this model running a
+     lock/unlock script. Max across files, not sum -- a dual-bus car
+     carries two files of the same model and must stay one car. The
+     fitted total above does sum, but that habit predates this claim,
+     and a promise made to a customer gets the conservative number. */
+  const csN = inYear.length
+    ? Math.max(0, ...inYear.map(f => (f.sc && f.sc.n) || 0)) : 0;
+  const cs  = csN ? {n: csN,
+    s: [...new Set(inYear.flatMap(f => (f.sc && f.sc.s) || []))].slice(0,4)}
+    : null;
 
   if(year && !inYear.length){
     const r = [...new Set(files.map(f => f.y0
@@ -939,18 +960,18 @@ function verdict(files, year){
             p:T("vYearP",{r}), inYear:files, lv};
   }
   if(lv.reporting)
-    return {cls:"ok", h:T("vOk"), inYear, lv, p:null,
+    return {cls:"ok", h:T("vOk"), inYear, lv, cs, p:null,
       say:T("sayOk", {s: lv.signals.slice(0,3).join(state.lang === "ar" ? "\u060c " : ", ")}),
       nums:[[fitted,T("nFitted")],[`${lv.reporting} / ${lv.saw}`,T("nSampled")],
             [lv.signals.length,T("nSignals")]]};
   if(fitted && lv.saw)
-    return {cls:"bad", h:T("vDead"), inYear, lv, p:T("vDeadP"), say:T("sayDead"),
+    return {cls:"bad", h:T("vDead"), inYear, lv, cs, p:T("vDeadP"), say:T("sayDead"),
       nums:[[fitted,T("nFitted")],[lv.saw,T("nChecked")],[cfgs,T("nConfigs")]]};
   if(fitted && (active || !actKnown()))
-    return {cls:"warn", h:T("vPend"), inYear, lv, p:T("vPendP"), say:T("sayPend"),
+    return {cls:"warn", h:T("vPend"), inYear, lv, cs, p:T("vPendP"), say:T("sayPend"),
       nums:[[fitted,T("nFitted")],[active,T("nActive")],[cfgs,T("nConfigs")]]};
   if(fitted)
-    return {cls:"warn", h:T("vQuiet"), inYear, lv, p:T("vQuietP"), say:T("sayQuiet"),
+    return {cls:"warn", h:T("vQuiet"), inYear, lv, cs, p:T("vQuietP"), say:T("sayQuiet"),
       nums:[[fitted,T("nFitted")],[cfgs,T("nConfigs")]]};
   return {cls:"bad", h:T("vNever"), nums:null, p:T("vNeverP"), say:T("sayNever"),
           inYear, lv};
@@ -991,8 +1012,12 @@ function renderPick(){
     .map(([n,l]) => `<span><b>${n}</b> ${esc(l)}</span>`).join("")}</div>`;
   if(v.p) html += `<p>${esc(v.p)}</p>`;
   if(v.say) html += `<div class="say"><span>${T("say")}</span>${esc(v.say)}</div>`;
+  if(v.cs) html += `<div class="say cshare"><span>${T("csT")}</span>${
+    esc(T("csLine", {n: v.cs.n}))}<i class="csn">${
+    v.cs.s.map(bdi).join(" \u00b7 ")}</i></div>`;
   state.shareText = `canval \u2014 ${mk} ${md}${yr ? " " + yr : ""}\n${v.h}${
-    v.say ? "\n" + v.say : ""}\n${location.href}`;
+    v.say ? "\n" + v.say : ""}${
+    v.cs ? "\n" + T("csShare", {n: v.cs.n}) : ""}\n${location.href}`;
   html += `<button class="shr" id="shr">${T("share")}</button>`;
   if(v.lv.signals.length)
     html += `<div class="live">${v.lv.signals

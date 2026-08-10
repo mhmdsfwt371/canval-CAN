@@ -91,6 +91,31 @@ def export_vehicles(conn) -> list[dict]:
                     pass
             live[r["file_id"]] = entry
 
+    # Devices that carry this file AND run a script whose name says lock:
+    # the field proof that this vehicle can do door control / car sharing.
+    # Distinct devices, so a dual-bus fitment is one car, not two.
+    locks: dict[int, int] = {}
+    lock_names: dict[int, list] = {}
+    if conn.execute("SELECT name FROM sqlite_master "
+                    "WHERE name='device_script'").fetchone():
+        for r in conn.execute(
+                """SELECT dc.file_id fid, COUNT(DISTINCT dc.imei) n
+                     FROM device_can dc
+                     JOIN device_script ds ON ds.imei = dc.imei
+                    WHERE dc.file_id IS NOT NULL
+                      AND ds.script_name IS NOT NULL
+                      AND instr(lower(ds.script_name), 'lock') > 0
+                    GROUP BY dc.file_id"""):
+            locks[r["fid"]] = r["n"]
+        for r in conn.execute(
+                """SELECT DISTINCT dc.file_id fid, ds.script_name sn
+                     FROM device_can dc
+                     JOIN device_script ds ON ds.imei = dc.imei
+                    WHERE dc.file_id IS NOT NULL
+                      AND ds.script_name IS NOT NULL
+                      AND instr(lower(ds.script_name), 'lock') > 0"""):
+            lock_names.setdefault(r["fid"], []).append(r["sn"])
+
     fitted, active, configs = {}, {}, {}
     for r in conn.execute(
             f"""SELECT file_id, COUNT(DISTINCT imei) n,
@@ -133,6 +158,9 @@ def export_vehicles(conn) -> list[dict]:
             entry["g"] = 1
         if row["file_id"] in live:
             entry["lv"] = live[row["file_id"]]
+        if locks.get(row["file_id"]):
+            entry["sc"] = {"n": locks[row["file_id"]],
+                           "s": sorted(lock_names.get(row["file_id"], []))[:4]}
         # Only carry what is actually set. Thousands of nulls cost more
         # than the branches needed to skip them.
         for key, value in (("v", row["vmid"]), ("mk", row["make"]),
@@ -221,6 +249,14 @@ def export_fleet(conn) -> dict:
                 entry["y1"] = r["y1"]
         top.append(entry)
 
+    lock_devices = 0
+    if conn.execute("SELECT name FROM sqlite_master "
+                    "WHERE name='device_script'").fetchone():
+        lock_devices = conn.execute(
+            """SELECT COUNT(DISTINCT imei) n FROM device_script
+                WHERE script_name IS NOT NULL
+                  AND instr(lower(script_name), 'lock') > 0""").fetchone()["n"]
+
     hints: dict[str, list] = {}
     has_hints = conn.execute(
         "SELECT name FROM sqlite_master WHERE name='config_hints'").fetchone()
@@ -247,7 +283,7 @@ def export_fleet(conn) -> dict:
     ).fetchone()["n"]
 
     return {
-        "estate": estate, "top": top, "hints": hints,
+        "estate": estate, "top": top, "hints": hints, "lk": lock_devices,
         "buses": {"entries": buses["entries"] or 0,
                   "inherited": buses["inherited"] or 0,
                   "asleep": buses["asleep"] or 0,
