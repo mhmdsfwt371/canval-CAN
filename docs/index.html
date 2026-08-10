@@ -486,7 +486,7 @@ const esc = s => (s ?? "").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;")
    the page may be Arabic, and only an isolate keeps them whole. */
 const bdi = s => `<bdi dir="${/[\u0600-\u06FF]/.test(s ?? "") ? "rtl" : "ltr"}">${esc(s)}</bdi>`;
 const THIS_YEAR = new Date().getFullYear();
-const VERSION = "3.1";
+const VERSION = "3.2";
 const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"ar"};
 
 /* What changed, and when. Kept beside the code rather than in a document
@@ -713,6 +713,8 @@ const STR = {
                "These files carry the vehicle's name, but nothing is fitted on them \u2014 the working installations are all on the file above."],
   crossCard:  ["الكارت اللي فوق بيعدّ الملف كله: {t} جهاز على {f} بكل العربيات اللي ماشية عليه. منهم {n} على العربية اللي بتدوّر عليها. افتح «إشارات» تشوف الأجهزة وقراياتها.",
                "The card above counts the whole file: {t} devices on {f} across every vehicle running it. {n} of them are on the vehicle you asked about. Open \u201csignals\u201d for the devices and their readings."],
+  csCross:    ["التحكم في الأبواب شغال على الملف اللي العربية دي ماشية عليه: {n} من {t} جهاز على {f} عليهم سكربت قفل/فتح عن بُعد.",
+               "Door control is fitted on the file this vehicle runs on: {n} of {t} devices on {f} carry a remote lock/unlock script."],
   csT:        ["تحكم ذكي بالسيارة", "Car sharing support"],
   capLock:    ["تحكم: قفل/فتح الأبواب", "Control: lock / unlock"],
   shT:        ["صور التركيب", "Fitting photos"],
@@ -735,6 +737,8 @@ const STR = {
                "This browser will not keep photos \u2014 try another one."],
   csLine:     ["التحكم في الأبواب مثبت فعلًا: {n} جهاز من الموديل ده شغال بسكربت قفل/فتح عن بُعد.",
                "Door control is field-proven: {n} devices of this model run a remote lock/unlock script."],
+  csShareX:   ["وتدعم كذلك القفل والفتح عن بُعد — {n} من {t} جهاز على ملف {f} شغالين بيه.",
+               "Also supports remote lock/unlock \u2014 {n} of {t} devices on the {f} file run it."],
   csShare:    ["وتدعم كذلك التحكم الذكي بالسيارة — قفل وفتح عن بُعد ({n} جهاز مثبت).",
                "Also supports car sharing \u2014 remote lock/unlock ({n} devices proven)."],
   sayPend:    ["مدعومة والتركيبات شغّالة، وبنأكد قايمة الإشارات النهائية خلال يوم أو يومين.",
@@ -1449,6 +1453,18 @@ function renderPick(){
     v.p = T("vCrossP", {f: top.fl});
     v.say = T("sayCross", {n: total, f: top.fl});
     v.nums = [[total, T("nFitted")], [top.fl, T("nOnFile")]];
+    /* The lock evidence hangs off the file, and this vehicle has none of
+       its own -- so the banner looked at empty files, found nothing, and
+       stayed silent about a car whose every working install runs a
+       lock script. It reads the file the car actually runs on instead.
+
+       The count is the file's, across every vehicle on it, and the
+       wording says so: claiming so many devices "of this model" would
+       be borrowing the neighbour's number. */
+    const cf = state.v.find(x => x.i === top.i);
+    if(cf && cf.sc && cf.sc.n){
+      v.cs = {n: cf.sc.n, s: cf.sc.s, t: cf.f, f: top.fl};
+    }
   }
 
   const seeQ = encodeURIComponent([mk, md, yr].filter(Boolean).join(" "));
@@ -1465,11 +1481,13 @@ function renderPick(){
   if(v.p) html += `<p>${esc(v.p)}</p>`;
   if(v.say) html += `<div class="say"><span>${T("say")}</span>${esc(v.say)}</div>`;
   if(v.cs) html += `<div class="say cshare"><span>${T("csT")}</span>${
-    esc(T("csLine", {n: v.cs.n}))}<i class="csn">${
+    esc(v.cs.t ? T("csCross", {n: v.cs.n, t: v.cs.t, f: v.cs.f})
+               : T("csLine", {n: v.cs.n}))}<i class="csn">${
     v.cs.s.map(bdi).join(" \u00b7 ")}</i></div>`;
   state.shareText = `canval \u2014 ${mk} ${md}${yr ? " " + yr : ""}\n${v.h}${
     v.say ? "\n" + v.say : ""}${
-    v.cs ? "\n" + T("csShare", {n: v.cs.n}) : ""}\n${location.href}`;
+    v.cs ? "\n" + (v.cs.t ? T("csShareX", {n: v.cs.n, t: v.cs.t, f: v.cs.f})
+                           : T("csShare", {n: v.cs.n})) : ""}\n${location.href}`;
   html += `<button class="shr" id="shr">${T("share")}</button>`;
   if(v.lv.signals.length || v.cs)
     html += `<div class="live">${
