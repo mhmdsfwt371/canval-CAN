@@ -486,7 +486,7 @@ const esc = s => (s ?? "").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;")
    the page may be Arabic, and only an isolate keeps them whole. */
 const bdi = s => `<bdi dir="${/[\u0600-\u06FF]/.test(s ?? "") ? "rtl" : "ltr"}">${esc(s)}</bdi>`;
 const THIS_YEAR = new Date().getFullYear();
-const VERSION = "2.7";
+const VERSION = "2.8";
 const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"ar"};
 
 /* What changed, and when. Kept beside the code rather than in a document
@@ -709,6 +709,8 @@ const STR = {
   crossT:     ["متركبة تحت اسم تاني", "Fitted under another name"],
   crossNote:  ["دي إعدادات مكتوب عليها العربية دي بالاسم، والأجهزة اللي شغّالة بيها محمّلة الملف ده. يعني حد جرب وعرف — ابدأ من نفس الملف.",
                "These are configurations that name this vehicle, on devices carrying that file. Somebody already worked it out \u2014 start from the same file."],
+  ownEmpty:   ["الملفات دي شايلة اسم العربية بس محدش متركب عليها — كل الشغل ماشي على الملف اللي فوق.",
+               "These files carry the vehicle's name, but nothing is fitted on them \u2014 the working installations are all on the file above."],
   csT:        ["تحكم ذكي بالسيارة", "Car sharing support"],
   capLock:    ["تحكم: قفل/فتح الأبواب", "Control: lock / unlock"],
   shT:        ["صور التركيب", "Fitting photos"],
@@ -1396,20 +1398,29 @@ function renderPick(){
   html += `</div>`;
 
   const [best, wider] = splitByFit(v.inYear, yr ? +yr : null);
+  const ownNone = !v.inYear.some(f => f.f);
+  const crossHtml = cross.length ? `<h3 class="sec">${T("crossT")}</h3>
+    <div class="list">${cross.map(c => `<div class="crow">
+      <b>${bdi(c.fl)}</b><span class="cn">${c.n} ${esc(T("nFitted"))}</span>
+      <i>${c.names.map(bdi).join(" \u00b7 ")}</i></div>`).join("")}</div>
+    <div class="note">${esc(T("crossNote"))}</div>` : "";
+  // The file that carries the work goes first. With nothing fitted on
+  // its own files, those rows are all zeros, and printing them above
+  // the working file made the page read as a denial of the verdict it
+  // had given one screen earlier.
+  if(ownNone) html += crossHtml;
   html += `<h3 class="sec">${wider.length ? T("bestFor",{y:yr}) : T("filesFor")}
       <b>${bdi(mk + " " + md)}</b></h3>
     <div class="list">${best.map(fileRow).join("") ||
       `<div class="empty">${T("noFiles")}</div>`}</div>`;
+  if(ownNone && cross.length && best.length)
+    html += `<div class="note">${esc(T("ownEmpty"))}</div>`;
   if(wider.length)
     html += `<h3 class="sec">${T("widerFor",{y:yr})}</h3>
       <div class="list">${wider.map(fileRow).join("")}</div>
       <div class="note">${esc(T("widerNote",{y:yr}))}</div>`;
-  if(cross.length) html += `<h3 class="sec">${T("crossT")}</h3>
-    <div class="list">${cross.map(c => `<div class="crow">
-      <b>${bdi(c.fl)}</b><span class="cn">${c.n} ${esc(T("nFitted"))}</span>
-      <i>${c.names.map(bdi).join(" \u00b7 ")}</i></div>`).join("")}</div>
-    <div class="note">${esc(T("crossNote"))}</div>`;
-  if(!v.inYear.some(f => f.f) && !cross.length) html += genericBlock(mk+" "+md);
+  if(!ownNone) html += crossHtml;
+  if(ownNone && !cross.length) html += genericBlock(mk+" "+md);
   $("out").innerHTML = html;
   mountShots(mk, md, yr);
   syncCards();
