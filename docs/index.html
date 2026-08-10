@@ -200,6 +200,11 @@ body{background:var(--paper);color:var(--ink);font-family:var(--sans);
 .shnote::placeholder{color:var(--muted)}
 .shnote:focus{outline:0;border-bottom:1px solid var(--canl)}
 .shdel[data-armed="1"]{color:var(--alert);font-size:11px}
+.shsign{display:block;margin-top:8px;font-family:var(--mono);font-size:13px;
+  color:var(--canl);background:none;border:1px solid var(--canl);
+  border-radius:2px;padding:7px 14px;cursor:pointer}
+.shsign:hover{background:var(--chip)}
+.shsign:disabled{opacity:.6;cursor:default}
 /* Full size opens over the page: a new tab cannot be handed a data URL. */
 .shview{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.86);
   display:flex;align-items:center;justify-content:center;padding:16px;
@@ -475,7 +480,7 @@ const esc = s => (s ?? "").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;")
    the page may be Arabic, and only an isolate keeps them whole. */
 const bdi = s => `<bdi dir="${/[\u0600-\u06FF]/.test(s ?? "") ? "rtl" : "ltr"}">${esc(s)}</bdi>`;
 const THIS_YEAR = new Date().getFullYear();
-const VERSION = "2.5";
+const VERSION = "2.6";
 const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"ar"};
 
 /* What changed, and when. Kept beside the code rather than in a document
@@ -484,6 +489,10 @@ const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"a
    about. Newest first. The rule that goes with it: a new version adds,
    it does not quietly change what already worked. */
 const CHANGES = [
+  {v:"2.6", d:"2026-08-10", items:[
+    ["صور التركيب بقت على درايف الشركة بدل ما تبقى على جهازك: تسجّل دخول جوجل مرة واحدة، وأي صورة ترفعها بتتحط في فولدر «صور التركيبات» بلينك يفتح لأي حد. كل صورة شايلة معاها الماركة والموديل والسنة، فالبحث بيرجّعها من الدرايف نفسه من غير قاعدة بيانات.",
+     "Fitting photos now live on the company Drive instead of your own device: sign in with Google once, and every photo lands in a \"\u0635\u0648\u0631 \u0627\u0644\u062a\u0631\u0643\u064a\u0628\u0627\u062a\" folder with a link anyone can open. Each file carries its make, model and year, so the search reads the index straight from Drive \u2014 no database anywhere."],
+  ]},
   {v:"2.5", d:"2026-08-10", items:[
     ["الصور بقى معاها سطر ملاحظة تكتب فيه مكان التوصيل — الصورة بتقول السلك راح فين والملاحظة بتقول أنهي سلك. والصورة بتفتح بحجمها الكامل فوق الصفحة، ومسح أي صورة بقى بضغطتين مش ضغطة، وأي صورة تفشل في الحفظ بتقول كده بدل ما تختفي في سكوت.",
      "Photos now carry a note for where it connects \u2014 the photo says where the wire went, the note says which wire. Full size opens over the page, removing one takes two taps instead of one, and a photo that fails to save says so instead of vanishing quietly."],
@@ -689,6 +698,12 @@ const STR = {
   shAny:      ["كل السنين", "Any year"],
   shDel:      ["امسح الصورة", "Remove"],
   shSure:     ["أمسح؟", "Sure?"],
+  shSign:     ["سجّل دخول جوجل", "Sign in with Google"],
+  shSigning:  ["جاري الدخول…", "Signing in\u2026"],
+  shSignWhy:  ["الصور محفوظة على درايف الشركة عشان التيم كله يشوفها — سجّل دخولك مرة واحدة.",
+               "Photos live on the company Drive so the whole team sees them \u2014 sign in once."],
+  shSignNo:   ["الدخول ما تمّش. اتأكد إن إيميلك متضاف في المستخدمين المسموح لهم.",
+               "Sign-in did not complete. Check that your email is on the allowed list."],
   shNote:     ["اكتب مكان التوصيل…", "Where it connects\u2026"],
   shLost:     ["{n} صورة ما اتحفظتش — يا إما المساحة خلصت يا إما الملف مش صورة.",
                "{n} photo(s) were not saved \u2014 either the space ran out or the file was not an image."],
@@ -826,7 +841,7 @@ function terms(s){
    all. Everything above it goes through `SHOTS`, so putting the photos
    somewhere the whole team can reach is a change to this object and to
    nothing else. */
-const SHOTS = (() => {
+const LOCAL = (() => {
   const NAME = "canval-shots", STORE = "shots";
   let dbp = null;
   const open = () => dbp || (dbp = new Promise((res, rej) => {
@@ -848,15 +863,141 @@ const SHOTS = (() => {
     /* No store, no promises: the section says so instead of failing. */
     ready: () => typeof indexedDB !== "undefined",
     shared: false,
+    needsAuth: () => false,
+    signIn: async () => {},
     async list(car){
       if(!this.ready()) return [];
       const all = await req((await shop("readonly")).index("car").getAll(car));
       return (all || []).sort((a, b) => b.at - a.at);
     },
-    async add(rec){ await req((await shop("readwrite")).put(rec)); return rec; },
+    async save(rec){ await req((await shop("readwrite")).put(rec)); return rec; },
+    async setNote(rec){ return this.save(rec); },
     async del(id){ await req((await shop("readwrite")).delete(id)); },
   };
 })();
+
+/* --------------------------------------------- the same shelf, on Drive
+
+   A photo that only exists in the browser that took it is a photo the
+   team does not have. Drive gives three things at once: somewhere to put
+   the bytes, a link anyone can open, and -- because each file carries the
+   car it belongs to -- the index itself. No database, no server.
+
+   The scope is drive.file, which reaches only the files this page
+   created. That is deliberate: it is the one Drive scope Google does not
+   gate behind a security review, so this works the day it is switched on
+   rather than the month after. */
+const GOOGLE_CLIENT_ID =
+  "28796602518-f364cbg4875k44v4t4sr9cc832i43hml.apps.googleusercontent.com";
+const SHOT_FOLDER = "\u0635\u0648\u0631 \u0627\u0644\u062a\u0631\u0643\u064a\u0628\u0627\u062a";
+
+const DRIVE = (() => {
+  const API = "https://www.googleapis.com/drive/v3";
+  const UP = "https://www.googleapis.com/upload/drive/v3/files";
+  const SCOPE = "https://www.googleapis.com/auth/drive.file";
+  let token = null, folder = null, client = null;
+
+  const gis = () => new Promise((res, rej) => {
+    if(window.google && window.google.accounts) return res();
+    const s = document.createElement("script");
+    s.src = "https://accounts.google.com/gsi/client";
+    s.onload = res;
+    s.onerror = () => rej(new Error("google sign-in did not load"));
+    document.head.appendChild(s);
+  });
+
+  const call = async (path, opts = {}) => {
+    const r = await fetch(path.startsWith("http") ? path : API + path, {
+      ...opts, headers: {Authorization: `Bearer ${token}`, ...(opts.headers || {})}});
+    if(r.status === 401){ token = null; throw new Error("signed out"); }
+    if(!r.ok) throw new Error(`${r.status} ${(await r.text()).slice(0, 200)}`);
+    return r.status === 204 ? null : r.json();
+  };
+
+  // Found or made, once per session. With drive.file this search only
+  // ever sees folders this page made, so it cannot wander into the rest
+  // of somebody's Drive.
+  const folderId = async () => {
+    if(folder) return folder;
+    const q = encodeURIComponent(`name='${SHOT_FOLDER}' and trashed=false and `
+      + `mimeType='application/vnd.google-apps.folder'`);
+    const found = await call(`/files?q=${q}&fields=files(id)&pageSize=1`);
+    if(found.files && found.files.length) return folder = found.files[0].id;
+    const made = await call("/files", {method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({name: SHOT_FOLDER,
+                            mimeType: "application/vnd.google-apps.folder"})});
+    return folder = made.id;
+  };
+
+  return {
+    ready: () => !!GOOGLE_CLIENT_ID,
+    shared: true,
+    needsAuth: () => !token,
+    async signIn(){
+      await gis();
+      return new Promise((res, rej) => {
+        client = client || google.accounts.oauth2.initTokenClient(
+          {client_id: GOOGLE_CLIENT_ID, scope: SCOPE, callback: () => {}});
+        client.callback = r => r.access_token
+          ? res(token = r.access_token)
+          : rej(new Error(r.error || "sign-in refused"));
+        client.requestAccessToken();
+      });
+    },
+    async list(car){
+      if(!token) return [];
+      const fid = await folderId();
+      const q = encodeURIComponent(`'${fid}' in parents and trashed=false and `
+        + `appProperties has {key='car' and value='${car}'}`);
+      const r = await call(`/files?q=${q}&pageSize=100&orderBy=createdTime desc`
+        + `&fields=files(id,description,createdTime,appProperties)`);
+      return (r.files || []).map(f => ({
+        id: f.id, car,
+        yr: +((f.appProperties || {}).yr) || null,
+        note: f.description || "",
+        at: Date.parse(f.createdTime) || 0,
+        // The thumbnail service serves a link-shared file to anyone,
+        // which is exactly what a colleague opening this page is.
+        src: `https://drive.google.com/thumbnail?id=${f.id}&sz=w1000`,
+      }));
+    },
+    async save(rec){
+      const blob = await (await fetch(rec.src)).blob();
+      const name = `${rec.car.replace(/\|/g, "__")}__${rec.yr || "any"}`
+        + `__${rec.at}.jpg`;
+      const meta = {name, parents: [await folderId()], description: rec.note || "",
+        appProperties: {car: rec.car, mk: rec.mk || "", md: rec.md || "",
+                        yr: String(rec.yr || "")}};
+      const b = "canval" + Math.random().toString(36).slice(2);
+      const body = new Blob([
+        `--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n`,
+        JSON.stringify(meta),
+        `\r\n--${b}\r\nContent-Type: image/jpeg\r\n\r\n`, blob,
+        `\r\n--${b}--`]);
+      const made = await call(`${UP}?uploadType=multipart&fields=id`,
+        {method: "POST", headers: {"Content-Type": `multipart/related; boundary=${b}`},
+         body});
+      // Without this the link only opens for whoever uploaded it.
+      await call(`/files/${made.id}/permissions`, {method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({role: "reader", type: "anyone"})});
+      return {...rec, id: made.id,
+              src: `https://drive.google.com/thumbnail?id=${made.id}&sz=w1000`};
+    },
+    async setNote(rec){
+      await call(`/files/${rec.id}`, {method: "PATCH",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({description: rec.note || ""})});
+      return rec;
+    },
+    async del(id){ await call(`/files/${id}`, {method: "DELETE"}); },
+  };
+})();
+
+/* Drive when it is configured, the browser's own shelf otherwise -- so
+   the page still works opened from a file, with no account at all. */
+const SHOTS = DRIVE.ready() ? DRIVE : LOCAL;
 
 /* One car, one key -- folded, so "KIA"/"kia " land in the same place. */
 const shotCar = (mk, md) => fold(mk) + "|" + fold(md);
@@ -1233,7 +1374,7 @@ async function saveNote(rows, id, text){
   const r = (rows || []).find(x => x.id === id);
   if(!r) return null;
   r.note = String(text || "").trim().slice(0, 120);
-  await SHOTS.add(r);
+  await SHOTS.setNote(r);
   return r;
 }
 
@@ -1242,6 +1383,24 @@ async function mountShots(mk, md, yr){
   if(!grid) return;
   if(!SHOTS.ready()){ grid.innerHTML = `<div class="empty">${T("shNo")}</div>`; return; }
   const car = shotCar(mk, md);
+
+  // Shared storage means an account. Say so plainly and once, with the
+  // button right there, instead of an empty box that looks broken.
+  if(SHOTS.needsAuth()){
+    grid.innerHTML = `<div class="empty">${esc(T("shSignWhy"))}
+      <button class="shsign" id="shsign">${T("shSign")}</button></div>`;
+    const b = document.getElementById("shsign");
+    if(b) b.onclick = async () => {
+      b.disabled = true; b.textContent = T("shSigning");
+      try { await SHOTS.signIn(); await mountShots(mk, md, yr); }
+      catch(e){
+        b.disabled = false; b.textContent = T("shSign");
+        const say = document.getElementById("shwarn");
+        if(say) say.textContent = T("shSignNo");
+      }
+    };
+    return;
+  }
 
   let rows = [];
   const paint = async () => {
@@ -1304,7 +1463,7 @@ async function mountShots(mk, md, yr){
     for(const f of files){
       try {
         const shot = await shrink(f);
-        await SHOTS.add({
+        await SHOTS.save({
           id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           car, mk, md, yr: yr ? +yr : null, note: "", at: Date.now(), ...shot});
       } catch(err){ lost++; }        // one bad file must not lose the rest

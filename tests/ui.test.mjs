@@ -144,10 +144,11 @@ const run = `
 
   // -- fitting photos, with a store standing in for the browser's ----
   const mem = [];
-  SHOTS.ready = () => true;
-  SHOTS.list  = async () => mem.slice().sort((a, b) => b.at - a.at);
-  SHOTS.del   = async id => { const i = mem.findIndex(x => x.id === id);
-                              if(i >= 0) mem.splice(i, 1); };
+  SHOTS.ready     = () => true;
+  SHOTS.needsAuth = () => false;
+  SHOTS.list      = async () => mem.slice().sort((a, b) => b.at - a.at);
+  SHOTS.del       = async id => { const i = mem.findIndex(x => x.id === id);
+                                  if(i >= 0) mem.splice(i, 1); };
   check("one car, one key", shotCar("KIA ", " cerato"), "kia|cerato");
   await mountShots("ACME", "TRUCK", 2024);
   check("nothing yet, and it says so", store["shgrid"].innerHTML.includes(T("shEmpty")), true);
@@ -164,7 +165,7 @@ const run = `
 
   // The note is why the photo is worth keeping, so prove it survives.
   let saved = null;
-  SHOTS.add = async r => { saved = r; return r; };
+  SHOTS.setNote = async r => { saved = r; return r; };
   const back = await saveNote(mem, "b", "  CAN on OBD pins 6 and 14  ");
   check("the note is written through", saved && saved.id, "b");
   check("and trimmed on the way",      back.note, "CAN on OBD pins 6 and 14");
@@ -174,6 +175,13 @@ const run = `
   await mountShots("ACME", "TRUCK", 2024);
   check("removing one leaves the rest", store["shn"].textContent, "1");
   check("the note came back with it",   store["shgrid"].innerHTML.includes("OBD pins 6 and 14"), true);
+
+  // Signed out is a state with a door in it, not an empty shelf.
+  SHOTS.needsAuth = () => true;
+  await mountShots("ACME", "TRUCK", 2024);
+  check("signed out shows the door",  store["shgrid"].innerHTML.includes('id="shsign"'), true);
+  check("and says why it is there",   store["shgrid"].innerHTML.includes(T("shSignWhy")), true);
+  SHOTS.needsAuth = () => false;
 
   check("slug handles spaced names",  logoSlug("LAND ROVER"), "land-rover");
   check("cards carry a logo cell",    store["cards"].innerHTML.includes('class="lg'), true);
