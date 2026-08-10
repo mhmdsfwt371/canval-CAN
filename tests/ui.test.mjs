@@ -129,6 +129,7 @@ const run = `
   check("answer header shows the make", store["out"].innerHTML.includes("logos/acme.png"), true);
   check("look link targets the pick", store["out"].innerHTML.includes("q=ACME%20TRUCK"), true);
   check("make rows are marked for logos", !!(state.makes[0] && state.makes[0].logo), true);
+  check("card logo sits opposite the text", /card-lg\{[^}]*inset-inline-end/.test(html), true);
 
   process.exit(failed ? 1 : 0);
 })().catch(e => { console.error("RUNTIME ERROR:", e.stack); process.exit(1); });
