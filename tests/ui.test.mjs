@@ -128,6 +128,9 @@ const run = `
   check("no script, no claim",              !verdict(state.v.filter(x => x.i === 2), null).cs, true);
   check("answer shows the car-share line",  store["out"].innerHTML.includes('say cshare'), true);
   check("the script is named, not implied", store["out"].innerHTML.includes("Lock_Unlock"), true);
+  check("control sits with the sensors",    store["out"].innerHTML.includes('class="s cap"'), true);
+  check("the chip says it is control",      store["out"].innerHTML.includes(T("capLock")), true);
+  check("the note covers control too",      store["out"].innerHTML.includes(T("liveNoteC")), true);
   check("share text carries the lock line", (state.shareText||"").includes(T("csShare",{n:5})), true);
 
   // -- every make has a face, every answer a look link ----------------

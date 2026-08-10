@@ -247,6 +247,11 @@ bdi{unicode-bidi:isolate}
 .s{font-size:12.5px;padding:3px 9px;border-radius:2px;background:var(--chip);
   color:var(--chipT);border:1px solid var(--chipL)}
 .s.no{background:var(--chipN);color:var(--chipNT);border-color:var(--chipNL)}
+/* Control is not a reading. Same row, because that is where a customer
+   looks for what the car can do, but its own colour and its own word so
+   the two are never taken for one another. */
+.s.cap{background:transparent;color:var(--canh);border-color:var(--canh);
+  font-weight:600}
 @media(max-width:640px){
   .li{grid-template-columns:36px 1fr auto auto}
   .li .num:nth-child(5),.li .num:nth-child(6){display:none}
@@ -445,7 +450,7 @@ const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"a
    it does not quietly change what already worked. */
 const CHANGES = [
   {v:"2.2", d:"2026-08-10", items:[
-    ["تحكم ذكي بالسيارة: لو فيه أجهزة من الموديل شغّالة بسكربت قفل/فتح، النتيجة بتقول كده بالعدد وباسم السكربت نفسه، والجملة الجاهزة للعميل بتتوسع تلقائيًا. الدليل تركيبات حقيقية، مش وعد كتالوج.",
+    ["تحكم ذكي بالسيارة: لو فيه أجهزة من الموديل شغّالة بسكربت قفل/فتح، النتيجة بتقول كده بالعدد وباسم السكربت نفسه، وبتظهر شريحة «تحكم: قفل/فتح الأبواب» جنب الحساسات، والجملة الجاهزة للعميل بتتوسع تلقائيًا. الدليل تركيبات حقيقية، مش وعد كتالوج.",
      "Smart vehicle control: when devices of the model run a lock/unlock script, the verdict says so \u2014 with the count and the script's own name \u2014 and the customer sentence grows to match. The proof is real installations, not a catalogue promise."],
   ]},
   {v:"2.1", d:"2026-08-09", items:[
@@ -578,6 +583,8 @@ const STR = {
   nConfigs:   ["ملف إعداد", "configurations"],
   liveNote:   ["دي الإشارات اللي البرو قراها فعلًا من الأجهزة دي، مش اللي الكتالوج واعد بيه.",
                "These are signals the platform actually read from those devices, not what the catalogue promises."],
+  liveNoteC:  ["كل ده مثبت من الأجهزة نفسها — قراءات وتحكم — مش وعود كتالوج.",
+               "All of this is proven from the devices themselves \u2014 readings and control alike \u2014 not catalogue promises."],
   filesFor:   ["ملفات الكان —", "CAN files —"],
   noFiles:    ["مفيش ملفات", "No files"],
   bestFor:    ["الملفات المخصوصة لسنة {y}", "Files made for {y}"],
@@ -627,6 +634,7 @@ const STR = {
   sayOk:      ["مدعومة ومجرّبة في أسطولنا — بنقرا منها {s} وغيرهم.",
                "Supported and proven in our own fleet — we read {s} and more from it."],
   csT:        ["تحكم ذكي بالسيارة", "Smart vehicle control"],
+  capLock:    ["تحكم: قفل/فتح الأبواب", "Control: lock / unlock"],
   csLine:     ["التحكم في الأبواب مثبت فعلًا: {n} جهاز من الموديل ده شغال بسكربت قفل/فتح عن بُعد.",
                "Door control is field-proven: {n} devices of this model run a remote lock/unlock script."],
   csShare:    ["وتدعم كذلك التحكم الذكي بالسيارة — قفل وفتح عن بُعد ({n} جهاز مثبت).",
@@ -1019,10 +1027,11 @@ function renderPick(){
     v.say ? "\n" + v.say : ""}${
     v.cs ? "\n" + T("csShare", {n: v.cs.n}) : ""}\n${location.href}`;
   html += `<button class="shr" id="shr">${T("share")}</button>`;
-  if(v.lv.signals.length)
-    html += `<div class="live">${v.lv.signals
-      .map(s => `<span class="s">${bdi(s)}</span>`).join("")}</div>
-      <p style="margin-top:6px">${esc(T("liveNote"))}</p>`;
+  if(v.lv.signals.length || v.cs)
+    html += `<div class="live">${
+      (v.cs ? `<span class="s cap">${bdi(T("capLock"))}</span>` : "") +
+      v.lv.signals.map(s => `<span class="s">${bdi(s)}</span>`).join("")}</div>
+      <p style="margin-top:6px">${esc(T(v.cs ? "liveNoteC" : "liveNote"))}</p>`;
   html += `</div>`;
 
   const [best, wider] = splitByFit(v.inYear, yr ? +yr : null);
