@@ -487,7 +487,7 @@ const esc = s => (s ?? "").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;")
    the page may be Arabic, and only an isolate keeps them whole. */
 const bdi = s => `<bdi dir="${/[\u0600-\u06FF]/.test(s ?? "") ? "rtl" : "ltr"}">${esc(s)}</bdi>`;
 const THIS_YEAR = new Date().getFullYear();
-const VERSION = "3.6";
+const VERSION = "3.7";
 const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"ar"};
 
 /* What changed, and when. Kept beside the code rather than in a document
@@ -1461,55 +1461,62 @@ function renderPick(){
   // honest answer is yes-with-a-file, not the "never installed" this
   // used to print over twenty-five working installations.
   const cross = crossFor(mk, md);
-  /* Installs of its own and installs under another vehicle's name are
-     both real, and the page used to show whichever came first. When
-     there is something of its own the verdict stays its own -- adding a
-     line so the crossings below are not read as a separate car. */
-  if(cross.length && v.inYear.some(f => f.f)){
-    const top = cross[0], total = cross.reduce((s, c) => s + c.n, 0);
-    v.p = (v.p ? v.p + " " : "") + T("alsoCross", {n: total, f: top.fl});
-  }
-  if(cross.length && !v.inYear.some(f => f.f)){
-    /* Every fact on this page hangs off a file: the readings, the lock
-       scripts, whether anything is reporting at all. A car fitted on
-       another car's file has no file of its own, so each of those came
-       back empty and the page went quiet about a car with twenty-one
-       working installations behind it.
+  if(cross.length){
+    /* One car, two places its evidence lives: the files under its own
+       name, and the files it borrows from another vehicle. Splitting
+       those into two branches -- one for "has none of its own", one for
+       "has some" -- put the Outlander back where it started. Folding
+       OUTLANDER V2 in gave it a single device of its own, that was
+       enough to take the other branch, and a car with twenty-two working
+       installations was headlined with one.
 
-       Patching them one at a time is how the lock box got fixed while
-       the signal chips stayed hidden, and the chips got fixed while the
-       colour stayed wrong. So the borrowed files are put through the
-       same verdict the vehicle's own files would have been, and only
-       the wording is changed afterwards to say whose name is on them.
-       Anything added to verdict() from here on is inherited without
-       anyone having to remember this case.
-
-       No year is passed. The vehicle's own year is what the customer
-       asked about, but these devices are fitted and running today --
-       that is the evidence, whatever range the file happens to declare. */
-    const top = cross[0], total = cross.reduce((s, c) => s + c.n, 0);
+       So there is no branch. The borrowed files are appended to the
+       car's own and the whole set goes through the same verdict, which
+       is what makes the readings, the lock scripts and the colour follow
+       without any of them being remembered separately. */
+    const top = cross[0];
+    const crossN = cross.reduce((s, c) => s + c.n, 0);
+    const ownN = v.inYear.reduce((s, f) => s + (f.f || 0), 0);
     const borrowed = [...new Set(cross.map(c => c.i))]
-      .map(i => state.v.find(x => x.i === i)).filter(Boolean);
-    const bv = borrowed.length ? verdict(borrowed, null) : null;
+      .map(i => state.v.find(x => x.i === i))
+      .filter(f => f && !v.inYear.includes(f));
+    // No year. The car's year is what the customer asked about; these
+    // devices are fitted and running whatever range a file declares.
+    const bv = verdict([...v.inYear, ...borrowed], null);
 
-    v.h = T("vCross");
-    v.p = T("vCrossP", {f: top.fl});
-    v.say = T("sayCross", {n: total, f: top.fl});
-    v.nums = [[total, T("nFitted")], [top.fl, T("nOnFile")]];
-    if(bv){
-      /* The colour is the borrowed file's, not a flat green. Devices are
-         fitted either way, so the answer stays yes -- but a file whose
-         every device has gone quiet must not be painted as confidently
-         as one that is reporting. */
-      v.cls = bv.cls === "bad" && borrowed.some(f => f.f) ? "warn" : bv.cls;
-      v.lv = bv.lv;
-      // The lock count belongs to the file, across every vehicle on it.
-      // Carrying `t` and `f` is what makes the line say so instead of
-      // passing the neighbour's number off as this model's own.
-      if(bv.cs) v.cs = {...bv.cs, t: borrowed.reduce((n, f) => n + (f.f || 0), 0),
-                        f: top.fl};
+    /* The one number that must not come from verdict(): a borrowed file
+       carries every vehicle on it, and only the installs under this
+       car's name are this car's. One hundred and eleven devices run the
+       X-TRAIL file; twenty-one of them are Outlanders. */
+    const mine = ownN + crossN;
+
+    v.cls = bv.cls === "bad" && mine ? "warn" : bv.cls;
+    v.lv = bv.lv;
+    if(bv.nums && bv.nums.length){
+      v.nums = bv.nums.map(n => [...n]);
+      v.nums[0][0] = mine;
+    }
+
+    /* Whoever's file proves the door control, say so. Named when it is
+       borrowed, because "so many devices of this model" would be the
+       neighbour's number worn as this car's. */
+    const scFrom = [...v.inYear, ...borrowed]
+      .filter(f => f.sc && f.sc.n)
+      .sort((a, b) => b.sc.n - a.sc.n)[0];
+    v.cs = !scFrom ? null
+      : borrowed.includes(scFrom)
+        ? {n: scFrom.sc.n, s: scFrom.sc.s, t: scFrom.f, f: scFrom.n}
+        : {n: scFrom.sc.n, s: scFrom.sc.s};
+
+    if(!ownN){
+      v.h = T("vCross");
+      v.p = T("vCrossP", {f: top.fl});
+      v.say = T("sayCross", {n: crossN, f: top.fl});
+      v.nums = [[crossN, T("nFitted")], [top.fl, T("nOnFile")]];
       if(bv.lv && bv.lv.signals.length)
         v.nums.push([bv.lv.signals.length, T("nSignals")]);
+    }else{
+      v.p = (v.p ? v.p + " " : "") + T("alsoCross", {n: crossN, f: top.fl});
     }
   }
 

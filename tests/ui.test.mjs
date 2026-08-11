@@ -49,6 +49,11 @@ const fixtures = {
       f:2, a:0, c:1, s:["Fuel Level"], lv:{ n:2, k:2, r:0, s:[] } },
     { i:3, n:"J1939 GENERIC", mk:null, md:null, g:1, y0:null, y1:null, b:1,
       f:50, a:0, c:3, s:[], lv:{ n:6, k:2, r:1, s:[{n:"Odometer", v:"88", t:1}] } },
+    // One device of its own, twenty-five under somebody else's name.
+    // Folding a catalogue revision in gave the Outlander exactly this
+    // shape, and the page headlined it with the one.
+    { i:4, n:"BETA WAGON V2", mk:"BETA", md:"WAGON V2", y0:2020, y1:null, b:1,
+      f:1, a:0, c:1, s:["Fuel Level"], lv:{ n:1, k:1, r:0, s:[] } },
   ],
   "configs.json": [ { i:9, nm:"ACME TRUCK 2019", hw:98 } ],
   // A vehicle with no file of its own, fitted on somebody else's.
@@ -191,6 +196,20 @@ const run = `
   check("the crossing is found",   crossFor("BETA", "WAGON").length, 1);
   check("and carries the file",    crossFor("BETA", "WAGON")[0].fl, "ACME TRUCK");
   check("a stranger finds none",   crossFor("ACME", "TRUCK").length, 0);
+
+  // -- own installs and borrowed ones are one car's total -------------
+  // BETA WAGON has one device on its own revision file and twenty-five
+  // fitted under its name on ACME TRUCK. Twenty-six is the answer; one
+  // is what a page shows when it treats the two as separate cases.
+  state.pick = {mk:"BETA", md:"WAGON", yr:""};
+  renderPick();
+  check("its own file is found",      filesFor("BETA", "WAGON").length, 1);
+  check("the revision folds in",      filesFor("BETA", "WAGON V2").length, 1);
+  check("both counts reach the head", store["out"].innerHTML.includes("26"), true);
+  check("the borrowed file is named", store["out"].innerHTML.includes("ACME TRUCK"), true);
+  // put the page back where the checks below expect to find it
+  state.pick = {mk:"ACME", md:"TRUCK", yr:""};
+  renderPick();
 
   // -- MODEL, MODEL V1, MODEL v2: the catalogue's revisions, one car ---
   // Sixty-nine devices were hidden behind these names -- forty-one of
