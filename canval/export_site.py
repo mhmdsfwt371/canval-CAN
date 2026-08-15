@@ -117,6 +117,33 @@ def export_vehicles(conn) -> list[dict]:
                       AND instr(lower(ds.script_name), 'lock') > 0"""):
             lock_names.setdefault(r["fid"], []).append(r["sn"])
 
+    # The same question asked of the tracking platform: how many devices
+    # carrying this file have BOTH a lock and an unlock command wired to a
+    # button an operator can press. The script says the device can drive
+    # the lock; this says somebody can actually reach it. Two different
+    # facts, and a customer needs both to be true.
+    cmds: dict[int, int] = {}
+    cmd_names: dict[int, list] = {}
+    if conn.execute("SELECT name FROM sqlite_master "
+                    "WHERE name='device_command'").fetchone():
+        for r in conn.execute(
+                """SELECT dc.file_id fid, COUNT(DISTINCT dc.imei) n
+                     FROM device_can dc
+                    WHERE dc.file_id IS NOT NULL
+                      AND EXISTS (SELECT 1 FROM device_command a
+                                   WHERE a.imei = dc.imei AND a.family='lock')
+                      AND EXISTS (SELECT 1 FROM device_command b
+                                   WHERE b.imei = dc.imei AND b.family='unlock')
+                    GROUP BY dc.file_id"""):
+            cmds[r["fid"]] = r["n"]
+        for r in conn.execute(
+                """SELECT DISTINCT dc.file_id fid, ac.name nm
+                     FROM device_can dc
+                     JOIN device_command ac ON ac.imei = dc.imei
+                    WHERE dc.file_id IS NOT NULL
+                      AND ac.family IN ('lock','unlock')"""):
+            cmd_names.setdefault(r["fid"], []).append(r["nm"])
+
     fitted, active, configs = {}, {}, {}
     for r in conn.execute(
             f"""SELECT file_id, COUNT(DISTINCT imei) n,
@@ -162,6 +189,9 @@ def export_vehicles(conn) -> list[dict]:
         if locks.get(row["file_id"]):
             entry["sc"] = {"n": locks[row["file_id"]],
                            "s": sorted(lock_names.get(row["file_id"], []))[:4]}
+        if cmds.get(row["file_id"]):
+            entry["cm"] = {"n": cmds[row["file_id"]],
+                           "s": sorted(cmd_names.get(row["file_id"], []))[:6]}
         # Only carry what is actually set. Thousands of nulls cost more
         # than the branches needed to skip them.
         for key, value in (("v", row["vmid"]), ("mk", row["make"]),
@@ -311,6 +341,19 @@ def export_fleet(conn) -> dict:
                 WHERE script_name IS NOT NULL
                   AND instr(lower(script_name), 'lock') > 0""").fetchone()["n"]
 
+    # Devices the operator can actually press a door button on. Counted
+    # separately from the script figure on purpose: the gap between the
+    # two is the interesting number, not either one alone.
+    cmd_devices = 0
+    if conn.execute("SELECT name FROM sqlite_master "
+                    "WHERE name='device_command'").fetchone():
+        cmd_devices = conn.execute(
+            """SELECT COUNT(*) n FROM (
+                   SELECT imei FROM device_command
+                    WHERE family IN ('lock','unlock')
+                    GROUP BY imei
+                   HAVING COUNT(DISTINCT family) = 2)""").fetchone()["n"]
+
     hints: dict[str, list] = {}
     has_hints = conn.execute(
         "SELECT name FROM sqlite_master WHERE name='config_hints'").fetchone()
@@ -338,6 +381,7 @@ def export_fleet(conn) -> dict:
 
     return {
         "estate": estate, "top": top, "hints": hints, "lk": lock_devices,
+        "cd": cmd_devices,
         "buses": {"entries": buses["entries"] or 0,
                   "inherited": buses["inherited"] or 0,
                   "asleep": buses["asleep"] or 0,
