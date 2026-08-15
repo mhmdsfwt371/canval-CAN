@@ -40,6 +40,7 @@ const fixtures = {
     { i:1, n:"ACME TRUCK", mk:"ACME", md:"TRUCK", y0:2019, y1:null, b:1,
       f:6, a:0, c:2, s:["Fuel Level","RPM"], x:["Trunk Open"],
       sc:{n:5, s:["Lock_Unlock_Outputs_Registration Unified V2_1"]},
+      cm:{n:4, s:["Opendoors","CloseDoor&ignitionOFF"]},
       lv:{ n:6, k:3, r:2, t:1754500000,
            s:[{n:"Fuel Level", v:"41", u:"%", t:1754500000},
               {n:"RPM", t:0}],
@@ -54,6 +55,12 @@ const fixtures = {
     // shape, and the page headlined it with the one.
     { i:4, n:"BETA WAGON V2", mk:"BETA", md:"WAGON V2", y0:2020, y1:null, b:1,
       f:1, a:0, c:1, s:["Fuel Level"], lv:{ n:1, k:1, r:0, s:[] } },
+    // Lock script fitted, no door command configured: the gap this
+    // evidence exists to surface. A page reading only the script calls
+    // this ready and the customer finds no button.
+    { i:5, n:"GAMMA VAN", mk:"GAMMA", md:"VAN", y0:2021, y1:null, b:1,
+      f:2, a:0, c:1, s:["Fuel Level"], sc:{n:2, s:["Lock_Unlock_V1"]},
+      lv:{ n:2, k:2, r:0, s:[] } },
   ],
   "configs.json": [ { i:9, nm:"ACME TRUCK 2019", hw:98 } ],
   // A vehicle with no file of its own, fitted on somebody else's.
@@ -234,6 +241,40 @@ const run = `
   check("look link targets the pick", store["out"].innerHTML.includes("q=ACME%20TRUCK"), true);
   check("make rows are marked for logos", !!(state.makes[0] && state.makes[0].logo), true);
   check("card logo sits opposite the text", /card-lg\{[^}]*inset-inline-end/.test(html), true);
+
+  // -- the button in the tracking platform, beside the script ---------
+  // Two facts, deliberately not merged. The script says the device can
+  // drive the lock; the command says somebody can press it. A car with
+  // the first and not the second is a configuration change away from
+  // working, and that sentence is worth more to sales than a silent
+  // green that quietly overstates the case.
+  const withBtn = verdict(state.v.filter(x => x.i === 1), null);
+  const noBtn   = verdict(state.v.filter(x => x.i === 5), null);
+  check("the button count is carried",   withBtn.cm && withBtn.cm.n, 4);
+  check("a script with no button is null", noBtn.cm, null);
+  check("the script still stands alone",   noBtn.cs && noBtn.cs.n, 2);
+
+  state.pick = {mk:"ACME", md:"TRUCK", yr:"2019"};
+  renderPick();
+  const onBtn = store["out"].innerHTML;
+  check("the page says the button is there", onBtn.includes("cmn"), true);
+  check("and names the command",             onBtn.includes("CloseDoor"), true);
+
+  state.pick = {mk:"GAMMA", md:"VAN", yr:""};
+  renderPick();
+  const offBtn = store["out"].innerHTML;
+  check("the gap is stated, not hidden",  offBtn.includes("cmn"), true);
+  check("the car-sharing box still shows", offBtn.includes("cshare"), true);
+
+  // A page whose data predates this step must not change at all: the
+  // whole estate looks like that until the first nightly run lands.
+  const noData = verdict([{i:9, n:"X", mk:"X", md:"X", f:3, c:1, s:[],
+                           sc:{n:1, s:["Lock_V1"]}, lv:{n:0,k:0,r:0,s:[]}}], null);
+  check("no command data leaves cm null",  noData.cm, null);
+  check("and the script verdict is intact", noData.cs && noData.cs.n, 1);
+
+  state.pick = {mk:"ACME", md:"TRUCK", yr:""};
+  renderPick();
 
   process.exit(failed ? 1 : 0);
 })().catch(e => { console.error("RUNTIME ERROR:", e.stack); process.exit(1); });
