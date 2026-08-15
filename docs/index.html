@@ -154,6 +154,10 @@ body{background:var(--paper);color:var(--ink);font-family:var(--sans);
   border:1px dashed var(--line);border-radius:2px;font-size:14.5px}
 .csn{display:block;margin-top:5px;font-family:var(--mono);
   font-size:10.5px;font-style:normal;color:var(--muted)}
+/* The second sentence of the car-sharing box: whether the operator has a
+   button. Set apart because it carries the action -- "no button yet" is
+   the line that turns a lost sale into a config change. */
+.cmn{display:block;margin-top:6px;font-weight:600;font-size:13.5px}
 .lg{display:inline-flex;align-items:center;justify-content:center;
   width:26px;height:26px;flex:none;vertical-align:middle}
 .lg img{width:100%;height:100%;object-fit:contain}
@@ -487,7 +491,7 @@ const esc = s => (s ?? "").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;")
    the page may be Arabic, and only an isolate keeps them whole. */
 const bdi = s => `<bdi dir="${/[\u0600-\u06FF]/.test(s ?? "") ? "rtl" : "ltr"}">${esc(s)}</bdi>`;
 const THIS_YEAR = new Date().getFullYear();
-const VERSION = "3.7";
+const VERSION = "3.8";
 const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"ar"};
 
 /* What changed, and when. Kept beside the code rather than in a document
@@ -719,6 +723,14 @@ const STR = {
   alsoCross:  ["وكمان {n} جهاز متركّبين على ملف {f} تحت اسم العربية دي — تحت.",
                "Another {n} devices are fitted under this vehicle's name on the {f} file \u2014 below."],
   csT:        ["تحكم ذكي بالسيارة", "Car sharing support"],
+  cmYes:      ["والزرار نفسه موجود في نظام التتبّع على {n} جهاز — يعني المشغّل يقدر يقفل ويفتح من الشاشة دلوقتي.",
+               "And the button itself exists in the tracking platform on {n} devices \u2014 the operator can lock and unlock from the screen today."],
+  cmNo:       ["بس لسه مفيش زرار قفل/فتح متظبّط في نظام التتبّع على الأجهزة دي — السكربت موجود والتوصيل تمام، ناقص إعداد الأمر.",
+               "But no lock/unlock button is set up in the tracking platform on these devices yet \u2014 the script is there and the wiring is fine; the command still needs configuring."],
+  cmOnly:     ["زرار القفل/الفتح موجود في نظام التتبّع على {n} جهاز من الموديل ده.",
+               "A lock/unlock button exists in the tracking platform on {n} devices of this model."],
+  cmShare:    ["والزرار جاهز في نظام التتبّع على {n} جهاز.",
+               "And the button is ready in the tracking platform on {n} devices."],
   capLock:    ["تحكم: قفل/فتح الأبواب", "Control: lock / unlock"],
   shT:        ["صور التركيب", "Fitting photos"],
   shAdd:      ["+ ارفع صورة", "+ Add a photo"],
@@ -1410,6 +1422,16 @@ function verdict(files, year){
   const cs  = csN ? {n: csN,
     s: [...new Set(inYear.flatMap(f => (f.sc && f.sc.s) || []))].slice(0,4)}
     : null;
+  /* The same count taken from the tracking platform: devices with BOTH a
+     lock and an unlock command wired to a button. Max, not sum, for the
+     dual-bus reason above. Kept apart from cs on purpose -- a script the
+     device can run and a button somebody can press are two facts, and
+     the gap between them is the useful one. */
+  const cmN = inYear.length
+    ? Math.max(0, ...inYear.map(f => (f.cm && f.cm.n) || 0)) : 0;
+  const cm  = cmN ? {n: cmN,
+    s: [...new Set(inYear.flatMap(f => (f.cm && f.cm.s) || []))].slice(0,6)}
+    : null;
 
   if(year && !inYear.length){
     const r = [...new Set(files.map(f => f.y0
@@ -1418,18 +1440,18 @@ function verdict(files, year){
             p:T("vYearP",{r}), inYear:files, lv};
   }
   if(lv.reporting)
-    return {cls:"ok", h:T("vOk"), inYear, lv, cs, p:null,
+    return {cls:"ok", h:T("vOk"), inYear, lv, cs, cm, p:null,
       say:T("sayOk", {s: lv.signals.slice(0,3).join(state.lang === "ar" ? "\u060c " : ", ")}),
       nums:[[fitted,T("nFitted")],[`${lv.reporting} / ${lv.saw}`,T("nSampled")],
             [lv.signals.length,T("nSignals")]]};
   if(fitted && lv.saw)
-    return {cls:"bad", h:T("vDead"), inYear, lv, cs, p:T("vDeadP"), say:T("sayDead"),
+    return {cls:"bad", h:T("vDead"), inYear, lv, cs, cm, p:T("vDeadP"), say:T("sayDead"),
       nums:[[fitted,T("nFitted")],[lv.saw,T("nChecked")],[cfgs,T("nConfigs")]]};
   if(fitted && (active || !actKnown()))
-    return {cls:"warn", h:T("vPend"), inYear, lv, cs, p:T("vPendP"), say:T("sayPend"),
+    return {cls:"warn", h:T("vPend"), inYear, lv, cs, cm, p:T("vPendP"), say:T("sayPend"),
       nums:[[fitted,T("nFitted")],[active,T("nActive")],[cfgs,T("nConfigs")]]};
   if(fitted)
-    return {cls:"warn", h:T("vQuiet"), inYear, lv, cs, p:T("vQuietP"), say:T("sayQuiet"),
+    return {cls:"warn", h:T("vQuiet"), inYear, lv, cs, cm, p:T("vQuietP"), say:T("sayQuiet"),
       nums:[[fitted,T("nFitted")],[cfgs,T("nConfigs")]]};
   return {cls:"bad", h:T("vNever"), nums:null, p:T("vNeverP"), say:T("sayNever"),
           inYear, lv};
@@ -1508,6 +1530,15 @@ function renderPick(){
         ? {n: scFrom.sc.n, s: scFrom.sc.s, t: scFrom.f, f: scFrom.n}
         : {n: scFrom.sc.n, s: scFrom.sc.s};
 
+    /* The button follows the same inheritance. A car running on someone
+       else's file gets that file's evidence whole -- taking the script
+       and leaving the command behind is exactly the fact-by-fact
+       patching this file already had to undo once. */
+    const cmFrom = [...v.inYear, ...borrowed]
+      .filter(f => f.cm && f.cm.n)
+      .sort((a, b) => b.cm.n - a.cm.n)[0];
+    v.cm = cmFrom ? {n: cmFrom.cm.n, s: cmFrom.cm.s} : null;
+
     if(!ownN){
       v.h = T("vCross");
       v.p = T("vCrossP", {f: top.fl});
@@ -1533,20 +1564,31 @@ function renderPick(){
     .map(([n,l]) => `<span><b>${n}</b> ${esc(l)}</span>`).join("")}</div>`;
   if(v.p) html += `<p>${esc(v.p)}</p>`;
   if(v.say) html += `<div class="say"><span>${T("say")}</span>${esc(v.say)}</div>`;
-  if(v.cs) html += `<div class="say cshare"><span>${T("csT")}</span>${
-    esc(v.cs.t ? T("csCross", {n: v.cs.n, t: v.cs.t, f: v.cs.f})
-               : T("csLine", {n: v.cs.n}))}<i class="csn">${
-    v.cs.s.map(bdi).join(" \u00b7 ")}</i></div>`;
+  /* Two facts, one box. The script says the device can drive the lock;
+     the command says an operator can reach it. Sales needs the second
+     sentence more than the first: a car with the script and no button
+     is one configuration change away from working, and saying so is
+     worth more than a silent green. */
+  if(v.cs || v.cm) html += `<div class="say cshare"><span>${T("csT")}</span>${
+    esc(v.cs
+      ? (v.cs.t ? T("csCross", {n: v.cs.n, t: v.cs.t, f: v.cs.f})
+                : T("csLine", {n: v.cs.n}))
+      : T("cmOnly", {n: v.cm.n}))}${
+    v.cs ? `<b class="cmn">${esc(v.cm ? T("cmYes", {n: v.cm.n})
+                                      : T("cmNo"))}</b>` : ""}<i class="csn">${
+    [...(v.cs ? v.cs.s : []), ...(v.cm ? v.cm.s : [])]
+      .filter((x, i, a) => a.indexOf(x) === i).map(bdi).join(" \u00b7 ")}</i></div>`;
   state.shareText = `canval \u2014 ${mk} ${md}${yr ? " " + yr : ""}\n${v.h}${
     v.say ? "\n" + v.say : ""}${
     v.cs ? "\n" + (v.cs.t ? T("csShareX", {n: v.cs.n, t: v.cs.t, f: v.cs.f})
-                           : T("csShare", {n: v.cs.n})) : ""}\n${location.href}`;
+                           : T("csShare", {n: v.cs.n})) : ""}${
+    v.cm ? " " + T("cmShare", {n: v.cm.n}) : ""}\n${location.href}`;
   html += `<button class="shr" id="shr">${T("share")}</button>`;
-  if(v.lv.signals.length || v.cs)
+  if(v.lv.signals.length || v.cs || v.cm)
     html += `<div class="live">${
-      (v.cs ? `<span class="s cap">${bdi(T("capLock"))}</span>` : "") +
+      ((v.cs || v.cm) ? `<span class="s cap">${bdi(T("capLock"))}</span>` : "") +
       v.lv.signals.map(s => `<span class="s">${bdi(s)}</span>`).join("")}</div>
-      <p style="margin-top:6px">${esc(T(v.cs ? "liveNoteC" : "liveNote"))}</p>`;
+      <p style="margin-top:6px">${esc(T((v.cs || v.cm) ? "liveNoteC" : "liveNote"))}</p>`;
   html += `</div>`;
 
   const [best, wider] = splitByFit(v.inYear, yr ? +yr : null);
