@@ -87,6 +87,20 @@ jobs:
         continue-on-error: true
         run: python -m canval.probe_live --sample 6
 
+      # Asks the same platform which door commands are wired to a button
+      # on each device. The CAN file says the vehicle speaks the bus and
+      # the XDM script says the device can drive the lock -- neither says
+      # anybody can press it. A device with a lock script and no command
+      # is a car whose customer answer is still "no".
+      #
+      # If the projection is ever refused this step says so loudly and
+      # writes nothing. An absent field is not the same as a device with
+      # no commands, and writing the second when we saw the first is how
+      # this project has lost data before.
+      - name: Check which devices expose a door command
+        continue-on-error: true
+        run: python -m canval.probe_commands
+
       - name: Export the site data
         run: python -m canval.export_site --out docs/data
 
