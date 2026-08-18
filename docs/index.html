@@ -18,7 +18,9 @@
      "install app", and the PNG is for iOS, which ignores both the
      manifest icons and any SVG. No service worker on purpose -- the data
      is nightly and the network is always there, so a cache would only add
-     a stale copy to explain. -->
+     a stale copy to explain. Chrome dropped the service-worker
+     requirement for install in 108 on mobile and 112 on desktop, so that
+     choice costs nothing: the manifest alone is enough. -->
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -343,6 +345,45 @@ bdi{unicode-bidi:isolate}
   .sheet{animation:rise .18s ease-out both}
 }
 
+/* Install. Chrome dropped the service-worker requirement in 108 (mobile)
+   and 112 (desktop), so the manifest alone makes this installable and the
+   page still ships no cache -- the data is nightly and a stale copy would
+   only be one more thing to explain.
+   Two paths, because iOS has no install API at all: Chrome and Edge hand
+   us an event we can fire on a click; Safari can only be told where the
+   button is. */
+#inst{position:fixed;inset-inline:0;bottom:0;z-index:70;display:flex;
+  justify-content:center;padding:0 12px 12px;pointer-events:none}
+#inst[hidden]{display:none}
+.instc{pointer-events:auto;background:var(--panel);border:1px solid var(--line);
+  border-radius:4px;box-shadow:0 18px 44px -16px rgba(0,0,0,.45);
+  width:min(560px,100%);padding:13px 15px;display:flex;gap:13px;
+  align-items:flex-start}
+.insti{width:38px;height:38px;flex:none;border-radius:8px}
+.instt{flex:1;min-width:0}
+.instt b{display:block;font-size:15px;margin-bottom:2px}
+.instt p{margin:0;font-size:13.5px;color:var(--muted);line-height:1.55}
+.instb{display:flex;gap:8px;margin-top:11px;flex-wrap:wrap}
+.instb button{font-family:inherit;font-size:13.5px;padding:7px 15px;
+  border-radius:3px;cursor:pointer;border:1px solid var(--line);
+  background:var(--soft);color:inherit}
+.instb button.go{background:var(--canl);border-color:var(--canl);color:#fff;
+  font-weight:600}
+/* The iOS walkthrough: no API to call, so the only honest help is showing
+   exactly which menu the button hides in. */
+.iosw{margin:10px 0 0;padding:0;list-style:none;counter-reset:s}
+.iosw li{counter-increment:s;position:relative;padding-inline-start:26px;
+  margin-bottom:7px;font-size:13.5px;line-height:1.6}
+.iosw li::before{content:counter(s);position:absolute;inset-inline-start:0;
+  top:1px;width:18px;height:18px;border-radius:50%;background:var(--chip);
+  color:var(--chipT);font-size:11px;font-weight:700;display:flex;
+  align-items:center;justify-content:center;font-family:var(--mono)}
+.iosw .ic{display:inline-flex;vertical-align:-3px;margin:0 2px}
+/* The lasting way back in, for anyone who dismissed the card. Hidden once
+   the app is running standalone -- offering to install what is already
+   installed is just noise. */
+#instBtn[hidden]{display:none}
+
 /* ---------------- cards ---------------- */
 #cards{margin-top:30px}
 .cards{display:grid;gap:10px;
@@ -404,6 +445,7 @@ footer{border-top:1px solid var(--line);padding:16px 0 40px;font-size:13px;
     <span data-t="tag"></span></div>
   <div class="gauges" id="gauges"></div>
   <div class="tools">
+    <button class="tool" id="instBtn" type="button" data-t="instBtn" hidden></button>
     <button class="tool" id="help" type="button" data-t="guideBtn"></button>
     <button class="tool" id="zoom" type="button" title="كبّر الخط">A+</button>
     <button class="tool" id="lang" type="button">EN</button>
@@ -477,6 +519,21 @@ footer{border-top:1px solid var(--line);padding:16px 0 40px;font-size:13px;
   </div>
 </div>
 
+<div id="inst" hidden>
+  <div class="instc" role="dialog" aria-labelledby="inst-t">
+    <img class="insti" src="icon-192.png" alt="" width="38" height="38">
+    <div class="instt">
+      <b id="inst-t" data-t="instT"></b>
+      <p id="inst-p"></p>
+      <div id="inst-steps"></div>
+      <div class="instb">
+        <button type="button" class="go" id="inst-go"></button>
+        <button type="button" id="inst-no" data-t="instLater"></button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <footer class="wrap">
   <div id="stamp"></div>
   <div data-t="footNote"></div>
@@ -491,7 +548,7 @@ const esc = s => (s ?? "").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;")
    the page may be Arabic, and only an isolate keeps them whole. */
 const bdi = s => `<bdi dir="${/[\u0600-\u06FF]/.test(s ?? "") ? "rtl" : "ltr"}">${esc(s)}</bdi>`;
 const THIS_YEAR = new Date().getFullYear();
-const VERSION = "3.8";
+const VERSION = "3.9";
 const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"ar"};
 
 /* What changed, and when. Kept beside the code rather than in a document
@@ -723,6 +780,31 @@ const STR = {
   alsoCross:  ["وكمان {n} جهاز متركّبين على ملف {f} تحت اسم العربية دي — تحت.",
                "Another {n} devices are fitted under this vehicle's name on the {f} file \u2014 below."],
   csT:        ["تحكم ذكي بالسيارة", "Car sharing support"],
+  instBtn:    ["تثبيت", "Install"],
+  instT:      ["ثبّت canval على جهازك", "Install canval on your device"],
+  instP:      ["يفتح من شاشة الجهاز على طول، بشاشة كاملة من غير شريط المتصفح.",
+               "Opens straight from your home screen, full screen, with no browser bar."],
+  instGo:     ["تثبيت الآن", "Install now"],
+  instLater:  ["مش دلوقتي", "Not now"],
+  instHow:    ["إزاي أثبّته", "Show me how"],
+  instOK:     ["تمّ التثبيت \u2014 هتلاقيه على شاشة جهازك.",
+               "Installed \u2014 you will find it on your home screen."],
+  /* iOS has no install API: Safari only offers Add to Home Screen from
+     the share menu, so the honest help is naming the exact taps. */
+  iosT:       ["ثبّته من سفاري", "Add it from Safari"],
+  ios1:       ["دوس زرار المشاركة تحت في نص الشاشة", "Tap the Share button at the bottom"],
+  ios2:       ["انزل تحت واختار \u00ab\u0625\u0636\u0627\u0641\u0629 \u0625\u0644\u0649 \u0627\u0644\u0634\u0627\u0634\u0629 \u0627\u0644\u0631\u0626\u064a\u0633\u064a\u0629\u00bb",
+               "Scroll down and choose \u201cAdd to Home Screen\u201d"],
+  ios3:       ["دوس \u00ab\u0625\u0636\u0627\u0641\u0629\u00bb فوق على اليمين", "Tap \u201cAdd\u201d in the top corner"],
+  iosNote:    ["لازم يكون مفتوح في سفاري \u2014 كروم على الآيفون مش بيقدر يثبّت.",
+               "This only works in Safari \u2014 Chrome on iPhone cannot install."],
+  /* Desktop browsers that never fire the event: Firefox has no install at
+     all, so pointing at a button that is not there would be a lie. */
+  dtT:        ["ثبّته من المتصفح", "Install from your browser"],
+  dt1:        ["دوس أيقونة التثبيت في شريط العنوان فوق", "Click the install icon in the address bar"],
+  dt2:        ["أو من قائمة المتصفح اختار \u00ab\u062a\u062b\u0628\u064a\u062a\u00bb", "Or open the browser menu and choose \u201cInstall\u201d"],
+  dtNote:     ["كروم وإيدج بيدعموا التثبيت. فايرفوكس لسه لأ.",
+               "Chrome and Edge support installing. Firefox does not yet."],
   cmYes:      ["والزرار نفسه موجود في نظام التتبّع على {n} جهاز — يعني المشغّل يقدر يقفل ويفتح من الشاشة دلوقتي.",
                "And the button itself exists in the tracking platform on {n} devices \u2014 the operator can lock and unlock from the screen today."],
   cmNo:       ["بس لسه مفيش زرار قفل/فتح متظبّط في نظام التتبّع على الأجهزة دي — السكربت موجود والتوصيل تمام، ناقص إعداد الأمر.",
@@ -2247,7 +2329,121 @@ $("lang").addEventListener("click", () => {
   state.lang = state.lang === "ar" ? "en" : "ar";
   save("lang", state.lang);
   paint();
+  /* The install card writes its own copy rather than leaning on data-t,
+     because the steps differ per platform. paint() cannot reach it. */
+  if(typeof INSTALL !== "undefined" && !$("inst").hidden) INSTALL.open();
 });
+
+/* ---------------------------------------------------------------- install
+   Three different worlds, and pretending otherwise is what makes install
+   buttons that do nothing:
+
+     Chrome, Edge   hand us a beforeinstallprompt event we can fire on a
+                    click. Real one-tap install.
+     Safari on iOS  has no API whatsoever. The only truthful help is
+                    naming the exact taps in the share menu.
+     Firefox        cannot install at all, so it is told so rather than
+                    shown a button that leads nowhere.
+
+   The card shows once. After that the toolbar keeps a small Install
+   button, so dismissing it is not a decision you are stuck with. Once the
+   app is running standalone both disappear -- offering to install what is
+   already installed is noise. */
+const INSTALL = (() => {
+  const card = $("inst"), btn = $("instBtn");
+  let deferred = null;
+
+  const standalone = () =>
+    matchMedia("(display-mode: standalone)").matches ||
+    matchMedia("(display-mode: window-controls-overlay)").matches ||
+    navigator.standalone === true;
+
+  const ua  = navigator.userAgent;
+  const ios = /iPad|iPhone|iPod/.test(ua) ||
+              (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  /* On iOS every browser is Safari underneath, but only real Safari shows
+     Add to Home Screen. Sending a Chrome-on-iPhone user into that menu to
+     hunt for a row that is not there is worse than saying so. */
+  const iosSafari = ios && !/CriOS|FxiOS|EdgiOS|OPiOS/.test(ua);
+
+  function shut(remember){
+    card.hidden = true;
+    if(remember) save("instSeen", "1");
+  }
+
+  /* One <svg> so the iOS step can point at the actual share glyph rather
+     than describe it. */
+  const shareIcon = `<svg class="ic" width="13" height="13" viewBox="0 0 20 20"
+      fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+      <path d="M10 13V3m0 0L6.5 6.5M10 3l3.5 3.5"/>
+      <path d="M5 9H3.5v8h13V9H15"/></svg>`;
+
+  function open(){
+    if(standalone()) return;
+    const p = $("inst-p"), steps = $("inst-steps"), go = $("inst-go");
+
+    if(deferred){
+      p.textContent = T("instP");
+      steps.innerHTML = "";
+      go.textContent = T("instGo");
+      go.onclick = async () => {
+        /* The event is single-use: once prompt() has been called it
+           cannot be fired again, so it is dropped either way. */
+        const e = deferred; deferred = null;
+        shut(true);
+        e.prompt();
+        const res = await e.userChoice.catch(() => null);
+        if(res && res.outcome === "accepted") btn.hidden = true;
+        else btn.hidden = false;
+      };
+    } else if(iosSafari){
+      p.textContent = T("instP");
+      steps.innerHTML =
+        `<ul class="iosw"><li>${esc(T("ios1"))} ${shareIcon}</li>` +
+        `<li>${esc(T("ios2"))}</li><li>${esc(T("ios3"))}</li></ul>`;
+      go.textContent = T("instLater");
+      go.onclick = () => shut(true);
+      $("inst-no").hidden = true;
+    } else {
+      p.textContent = T("instP");
+      steps.innerHTML =
+        `<ul class="iosw"><li>${esc(T("dt1"))}</li>` +
+        `<li>${esc(T("dt2"))}</li></ul>` +
+        `<p style="margin-top:8px">${esc(T(ios ? "iosNote" : "dtNote"))}</p>`;
+      go.textContent = T("instLater");
+      go.onclick = () => shut(true);
+      $("inst-no").hidden = true;
+    }
+    card.hidden = false;
+  }
+
+  $("inst-no").onclick = () => shut(true);
+  btn.onclick = () => { $("inst-no").hidden = false; open(); };
+
+  window.addEventListener("beforeinstallprompt", e => {
+    /* Chrome would otherwise show its own bar; we want the card to carry
+       the reason, not just the offer. */
+    e.preventDefault();
+    deferred = e;
+    btn.hidden = false;
+    if(!read("instSeen")) open();
+  });
+
+  window.addEventListener("appinstalled", () => {
+    deferred = null; shut(true); btn.hidden = true;
+  });
+
+  /* Safari and Firefox never fire the event, so nothing above would ever
+     run there. Give the page a moment to settle, then decide on what we
+     can actually observe. */
+  setTimeout(() => {
+    if(standalone()){ btn.hidden = true; card.hidden = true; return; }
+    btn.hidden = false;
+    if(!deferred && !read("instSeen") && iosSafari) open();
+  }, 2600);
+
+  return {open};
+})();
 
 state.lang = read("lang") || "ar";
 setZoom(read("zoom") || "");
