@@ -19,7 +19,15 @@ class El {
     disabled:false, hidden:false, placeholder:"", dataset:{}, handlers:{}, attrs:{}}); }
   set innerHTML(v){ this._h = v } get innerHTML(){ return this._h }
   addEventListener(k,f){ (this.handlers[k] ??= []).push(f) }
-  fire(k,e={}){ (this.handlers[k]||[]).forEach(f => f({preventDefault(){}, ...e})) }
+  /* A real element fires both the addEventListener handlers and the
+     on<event> property. The stub only did the first, which quietly made
+     every .onclick in the page look dead to the tests. */
+  fire(k,e={}){
+    const ev = {preventDefault(){}, target:this, ...e};
+    (this.handlers[k]||[]).forEach(f => f(ev));
+    const direct = this["on"+k];
+    if(typeof direct === "function") direct.call(this, ev);
+  }
   setAttribute(k,v){ this.attrs[k]=v } getAttribute(k){ return this.attrs[k] }
   querySelectorAll(){ return [] } querySelector(){ return null }
   insertAdjacentHTML(){} focus(){} contains(){ return false }
@@ -32,7 +40,17 @@ global.localStorage = { _d:{}, getItem(k){ return this._d[k] ?? null },
   setItem(k,v){ this._d[k]=v } };
 global.matchMedia = () => ({matches:false});
 global.location = { href: "https://example.test/" };
-try{ global.navigator = {}; }catch{ /* newer node pins it; the real one works fine */ }
+/* The install card listens on window and fires on a timer. Both are stubbed
+   so the page can be driven the way a browser would drive it: hand it the
+   event, then look at what it decided. */
+global.window = { _h:{},
+  addEventListener(k,f){ (this._h[k] ??= []).push(f) },
+  fire(k,e={}){ (this._h[k]||[]).forEach(f => f(e)) } };
+const timers = [];
+global.setTimeout = (fn, ms) => { timers.push(fn); return timers.length };
+global.runTimers = () => { const t = timers.splice(0); t.forEach(f => f()); };
+try{ global.navigator = {userAgent:"node", platform:"Linux", maxTouchPoints:0};
+}catch{ /* newer node pins it; the real one works fine */ }
 global.fetch = async name => ({ ok:true, json: async () => fixtures[name.replace("data/","")] });
 
 const fixtures = {
@@ -272,6 +290,38 @@ const run = `
                            sc:{n:1, s:["Lock_V1"]}, lv:{n:0,k:0,r:0,s:[]}}], null);
   check("no command data leaves cm null",  noData.cm, null);
   check("and the script verdict is intact", noData.cs && noData.cs.n, 1);
+
+  // -- install: three worlds, and a button that lies in none of them ---
+  // Chrome hands over an event, iOS Safari has no API at all, Firefox
+  // cannot install. One button that does nothing on two of the three is
+  // worse than no button, so each path is checked separately.
+  const card = store["inst"], iBtn = store["instBtn"];
+
+  // Chrome: the event arrives and the card offers a real install
+  let stopped = false, fired = false;
+  window.fire("beforeinstallprompt", {
+    preventDefault(){ stopped = true; },
+    prompt(){ fired = true; },
+    userChoice: Promise.resolve({ outcome: "dismissed" }) });
+  check("Chrome's own bar is suppressed", stopped, true);
+  check("the card opens by itself",       card.hidden, false);
+  check("the toolbar button appears",     iBtn.hidden, false);
+  check("it offers a real install",       store["inst-go"].textContent, T("instGo"));
+  check("no walkthrough is needed",       store["inst-steps"].innerHTML, "");
+
+  // Dismissing is remembered, but it is not final: the button stays put
+  store["inst-no"].fire("click");
+  check("dismissing closes the card",     card.hidden, true);
+  check("the choice is remembered",       localStorage.getItem("canval.instSeen"), "1");
+  check("the button survives dismissal",  iBtn.hidden, false);
+
+  // Pressing the toolbar button reopens it even after a dismissal
+  iBtn.fire("click");
+  check("the button reopens the card",    card.hidden, false);
+
+  // The install offer is real: pressing it fires the browser's prompt
+  store["inst-go"].fire("click");
+  check("pressing install fires the prompt", fired, true);
 
   state.pick = {mk:"ACME", md:"TRUCK", yr:""};
   renderPick();
