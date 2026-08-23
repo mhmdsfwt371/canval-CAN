@@ -305,6 +305,15 @@ bdi{unicode-bidi:isolate}
    the two are never taken for one another. */
 .s.cap{background:transparent;color:var(--canh);border-color:var(--canh);
   font-weight:600}
+/* The best-evidenced vehicles were the worst to read: a HIACE arrives
+   with forty readings and buries its own verdict. Twelve is about a
+   glance; the rest stay one tap away rather than being cut, because
+   somebody checking for one specific sensor still needs to find it. */
+.s.more{background:transparent;color:var(--muted);border-style:dashed;
+  cursor:pointer;font-family:var(--mono);font-size:11.5px}
+.s.more:hover{color:var(--ink);border-color:var(--muted)}
+.live.all .s.hid{display:inline}
+.s.hid{display:none}
 @media(max-width:640px){
   .li{grid-template-columns:36px 1fr auto auto}
   .li .num:nth-child(5),.li .num:nth-child(6){display:none}
@@ -548,7 +557,7 @@ const esc = s => (s ?? "").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;")
    the page may be Arabic, and only an isolate keeps them whole. */
 const bdi = s => `<bdi dir="${/[\u0600-\u06FF]/.test(s ?? "") ? "rtl" : "ltr"}">${esc(s)}</bdi>`;
 const THIS_YEAR = new Date().getFullYear();
-const VERSION = "3.9";
+const VERSION = "3.10";
 const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"ar"};
 
 /* What changed, and when. Kept beside the code rather than in a document
@@ -1438,6 +1447,11 @@ function since(ts){
   return "من " + n + " " + (n <= 10 ? w[2] : w[3]);
 }
 
+/* How many readings fit in a glance before the list stops being read at
+   all. Only 5% of cards go past this, but they are the cards with the
+   most proof behind them. */
+const SIG_SHOWN = 12;
+
 const num = (n,label) =>
   `<div class="num ${n ? "" : "zero"}"><b>${n ?? 0}</b>${label}</div>`;
 
@@ -1459,7 +1473,10 @@ function fileRow(f){
     <div class="nm"><div class="t">${bdi(f.n)}</div>
       <div class="d">${esc(bits)}</div>${live}</div>
     ${num(f.f, T("devices"))}
-    ${num(actKnown() ? (f.a || 0) : "\u2014", T("nActive"))}
+    ${/* "0 devices, 0 of them active in 30 days" is two ways of saying
+          nothing, and the second one reads like a fault rather than an
+          empty catalogue entry. A file with no installs shows a dash. */
+      num(f.f ? (actKnown() ? (f.a || 0) : "\u2014") : "\u2014", T("nActive"))}
     ${num(f.c, T("nConfigs"))}
     <button class="sx" data-sx="${f.i}">${(f.s||[]).length} ${T("nSig")}</button>
   </div>`;
@@ -1479,14 +1496,45 @@ function cfgRow(c){
    4. catalogued, never installed
    Live evidence beats install counts: a file on twenty parked trucks
    proves less than one truck actually sending fuel level. */
+/* The estate types the same sensor several ways -- "Out 1" and "OUT1",
+   "weight" and "Weight", "Fuel Level" in eight spellings across the
+   catalogue. A plain Set keeps them all, so one card ends up showing the
+   same reading two or three times and looks like the data is confused.
+   Fold on a comparison key and keep the most legible spelling: spaces
+   beat run-together, mixed case beats shouting. */
+const sigKey = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "");
+function nicer(a, b){
+  /* Shouting is usually wrong -- "FUEL LEVEL" should lose to "Fuel Level"
+     -- but a short all-caps token is an acronym, not shouting. Preferring
+     mixed case blindly turned ACC into Acc and RPM into Rpm, which reads
+     as a typo rather than a tidy-up. */
+  const acronym = x => !/ /.test(x) && x.length <= 4 && x === x.toUpperCase()
+                        && /[A-Z]/.test(x);
+  const mixed   = x => x !== x.toUpperCase() && x !== x.toLowerCase();
+  const score = x => (/ /.test(x) ? 2 : 0) +
+                     (acronym(x) ? 2 : mixed(x) ? 1 : 0);
+  const d = score(b) - score(a);
+  return d !== 0 ? (d > 0 ? b : a) : (b.length > a.length ? b : a);
+}
+function foldSignals(list){
+  const seen = new Map();
+  for(const raw of list){
+    const s = String(raw || "").trim();
+    if(!s) continue;
+    const k = sigKey(s);
+    if(!k) continue;
+    seen.set(k, seen.has(k) ? nicer(seen.get(k), s) : s);
+  }
+  return [...seen.values()];
+}
 function liveOf(files){
-  const s = new Set(); let asked=0, saw=0, reporting=0;
+  const raw = []; let asked=0, saw=0, reporting=0;
   for(const f of files){
     if(!f.lv) continue;
     asked += f.lv.n||0; saw += f.lv.k||0; reporting += f.lv.r||0;
-    (f.lv.s||[]).forEach(x => s.add(x));
+    (f.lv.s||[]).forEach(x => raw.push(x));
   }
-  return {asked, saw, reporting, signals:[...s]};
+  return {asked, saw, reporting, signals: foldSignals(raw)};
 }
 function verdict(files, year){
   const inYear = files.filter(f => coverYear(f, year));
@@ -1658,8 +1706,13 @@ function renderPick(){
       : T("cmOnly", {n: v.cm.n}))}${
     v.cs ? `<b class="cmn">${esc(v.cm ? T("cmYes", {n: v.cm.n})
                                       : T("cmNo"))}</b>` : ""}<i class="csn">${
-    [...(v.cs ? v.cs.s : []), ...(v.cm ? v.cm.s : [])]
-      .filter((x, i, a) => a.indexOf(x) === i).map(bdi).join(" \u00b7 ")}</i></div>`;
+    /* Script names only. The platform's command names were listed here
+       too for one version and it was a mistake: they doubled the line to
+       ten entries, and because the estate spells the same command several
+       ways the card showed "CloseDoor&ignitionOFF" and "Closedoors" side
+       by side, which reads like the data is unsure. The sentence above
+       already carries the fact; the spelling is nobody's business. */
+    (v.cs ? v.cs.s : []).map(bdi).join(" \u00b7 ")}</i></div>`;
   state.shareText = `canval \u2014 ${mk} ${md}${yr ? " " + yr : ""}\n${v.h}${
     v.say ? "\n" + v.say : ""}${
     v.cs ? "\n" + (v.cs.t ? T("csShareX", {n: v.cs.n, t: v.cs.t, f: v.cs.f})
@@ -1667,9 +1720,13 @@ function renderPick(){
     v.cm ? " " + T("cmShare", {n: v.cm.n}) : ""}\n${location.href}`;
   html += `<button class="shr" id="shr">${T("share")}</button>`;
   if(v.lv.signals.length || v.cs || v.cm)
-    html += `<div class="live">${
+    html += `<div class="live" id="livechips">${
       ((v.cs || v.cm) ? `<span class="s cap">${bdi(T("capLock"))}</span>` : "") +
-      v.lv.signals.map(s => `<span class="s">${bdi(s)}</span>`).join("")}</div>
+      v.lv.signals.map((s, i) =>
+        `<span class="s${i >= SIG_SHOWN ? " hid" : ""}">${bdi(s)}</span>`).join("") +
+      (v.lv.signals.length > SIG_SHOWN
+        ? `<button type="button" class="s more" data-more="1">+${
+            v.lv.signals.length - SIG_SHOWN}</button>` : "")}</div>
       <p style="margin-top:6px">${esc(T((v.cs || v.cm) ? "liveNoteC" : "liveNote"))}</p>`;
   html += `</div>`;
 
@@ -2123,6 +2180,16 @@ $("out").addEventListener("click", e => {
     tog.textContent = box.hidden
       ? T("declShow", {n: box.querySelectorAll(".chips .s").length})
       : T("declHide");
+    return;
+  }
+  /* The overflow chip. Reveals the rest of the readings in place rather
+     than opening anything: the person is mid-scan looking for one sensor
+     name, and a panel would lose their place. */
+  const more = e.target.closest("[data-more]");
+  if(more){
+    const row = more.closest(".live");
+    row.classList.add("all");
+    more.remove();
     return;
   }
   const btn = e.target.closest(".sx");
