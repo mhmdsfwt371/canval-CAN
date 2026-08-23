@@ -276,7 +276,11 @@ const run = `
   renderPick();
   const onBtn = store["out"].innerHTML;
   check("the page says the button is there", onBtn.includes("cmn"), true);
-  check("and names the command",             onBtn.includes("CloseDoor"), true);
+  check("and gives the count",               onBtn.includes(T("cmYes", {n: 4})), true);
+  // The platform's own command spellings stay out of the card. Listing
+  // them doubled the line and put "CloseDoor&ignitionOFF" next to
+  // "Closedoors", which reads as a data fault rather than untidy naming.
+  check("but not the raw command name",      onBtn.includes("CloseDoor&"), false);
 
   state.pick = {mk:"GAMMA", md:"VAN", yr:""};
   renderPick();
@@ -290,6 +294,39 @@ const run = `
                            sc:{n:1, s:["Lock_V1"]}, lv:{n:0,k:0,r:0,s:[]}}], null);
   check("no command data leaves cm null",  noData.cm, null);
   check("and the script verdict is intact", noData.cs && noData.cs.n, 1);
+
+  // -- readings: one sensor, one chip ---------------------------------
+  // The estate types the same sensor several ways. A plain Set kept them
+  // all and the card showed the same reading twice, which reads like the
+  // data is confused rather than the naming being untidy.
+  const dup = verdict([{i:7, n:"D", mk:"D", md:"D", f:5, c:1, s:[],
+    lv:{n:5, k:5, r:5, s:["Out 1","OUT1","weight","Weight","Fuel Level"]}}], null);
+  check("case duplicates fold away",  dup.lv.signals.length, 3);
+  check("the readable spelling wins", dup.lv.signals.includes("Out 1"), true);
+  check("shouting loses",             dup.lv.signals.includes("OUT1"), false);
+  check("capitalised wins",           dup.lv.signals.includes("Weight"), true);
+
+  // The best-evidenced vehicles had the worst cards: forty chips buried
+  // the verdict they were meant to support.
+  const many = verdict([{i:8, n:"E", mk:"E", md:"E", f:9, c:1, s:[],
+    lv:{n:9, k:9, r:9, s:Array.from({length:30}, (_, i) => "Sensor " + i)}}], null);
+  state.v.push({i:8, n:"E", mk:"E", md:"E", f:9, c:1, s:[],
+    lv:{n:9, k:9, r:9, s:Array.from({length:30}, (_, i) => "Sensor " + i)}});
+  check("all thirty are kept",        many.lv.signals.length, 30);
+  state.pick = {mk:"E", md:"E", yr:""};
+  renderPick();
+  const chips = (store["out"].innerHTML.match(/class="s hid"/g) || []).length;
+  check("the overflow is hidden, not cut", chips, 30 - 12);
+  check("and an expander is offered",
+        store["out"].innerHTML.includes("data-more"), true);
+
+  // A file nobody has fitted should not report an activity figure.
+  // Built with RegExp so the Arabic literal never sits next to a slash --
+  // the parser reads what follows one as flags.
+  const activeWord = T("nActive");
+  const phantom = new RegExp("<b>0</b>" + activeWord.slice(0, 4));
+  check("no phantom activity on an empty file",
+        phantom.test(store["out"].innerHTML), false);
 
   // -- install: three worlds, and a button that lies in none of them ---
   // Chrome hands over an event, iOS Safari has no API at all, Firefox
