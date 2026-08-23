@@ -309,9 +309,16 @@ bdi{unicode-bidi:isolate}
    with forty readings and buries its own verdict. Twelve is about a
    glance; the rest stay one tap away rather than being cut, because
    somebody checking for one specific sensor still needs to find it. */
-.s.more{background:transparent;color:var(--muted);border-style:dashed;
-  cursor:pointer;font-family:var(--mono);font-size:11.5px}
-.s.more:hover{color:var(--ink);border-color:var(--muted)}
+.s.more{background:var(--soft);color:var(--muted);border-color:var(--line);
+  cursor:pointer;font-weight:600}
+.s.more:hover{color:var(--ink);border-color:var(--muted);background:var(--sel)}
+.s.more:focus-visible{outline:2px solid var(--canh);outline-offset:1px}
+.untried{display:block;width:100%;margin-top:8px;padding:9px 12px;
+  font-family:inherit;font-size:13px;color:var(--muted);cursor:pointer;
+  background:transparent;border:1px dashed var(--line);border-radius:3px;
+  text-align:start}
+.untried:hover{color:var(--ink);border-color:var(--muted)}
+.untried-list[hidden]{display:none}
 .live.all .s.hid{display:inline}
 .s.hid{display:none}
 @media(max-width:640px){
@@ -557,7 +564,7 @@ const esc = s => (s ?? "").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;")
    the page may be Arabic, and only an isolate keeps them whole. */
 const bdi = s => `<bdi dir="${/[\u0600-\u06FF]/.test(s ?? "") ? "rtl" : "ltr"}">${esc(s)}</bdi>`;
 const THIS_YEAR = new Date().getFullYear();
-const VERSION = "3.10";
+const VERSION = "3.11";
 const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"ar"};
 
 /* What changed, and when. Kept beside the code rather than in a document
@@ -726,6 +733,8 @@ const STR = {
   noFiles:    ["مفيش ملفات", "No files"],
   bestFor:    ["الملفات المخصوصة لسنة {y}", "Files made for {y}"],
   widerFor:   ["ملفات أوسع بتغطي {y} كمان", "Wider files that also cover {y}"],
+  untried:    ["وكمان {n} ملف في الكتالوج محدش ركّبه — اعرضهم",
+               "{n} more catalogued files nobody has fitted \u2014 show them"],
   widerNote:  ["دي بداياتها أقدم، فهي بتغطي سنة {y} بس مش معمولة ليها. تنفع لو المخصوص ما اشتغلش.",
                "These start earlier, so they cover {y} without being made for it. Worth trying if the closer file fails."],
   proOk:      ["البرو: {r} من {k} جهاز بيطلّع {s} إشارة",
@@ -733,6 +742,7 @@ const STR = {
   proNo:      ["البرو: {k} جهاز اتفحص، مفيش إشارات",
                "Platform: {k} devices checked, nothing reported"],
   nSig:       ["إشارة", "signals"],
+  sigMore:    ["كمان {n}", "{n} more"],
   noSig:      ["مفيش إشارات معلنة", "No signals declared"],
   genTitle:   ["الطريق التاني — <b>البروتوكول العام</b>",
                "The other path — <b>the generic protocol</b>"],
@@ -1502,19 +1512,61 @@ function cfgRow(c){
    same reading two or three times and looks like the data is confused.
    Fold on a comparison key and keep the most legible spelling: spaces
    beat run-together, mixed case beats shouting. */
-const sigKey = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "");
+/* Written-out names and their shorthand, where the two are certainly the
+   same reading. Deliberately a short explicit list rather than fuzzy
+   matching: the catalogue also holds "Axle Weight 2", "Fuel Level 2" and
+   twenty "U32 User Defined" slots, which look like typos of each other
+   and are not -- anything clever enough to merge ENG-TEMP with Engine
+   Temperature is clever enough to merge axle two with axle three. */
+const SIG_SAME = {
+  engtemp:            "enginetemperature",
+  enginetemp:         "enginetemperature",
+  engtemperature:     "enginetemperature",
+  enginetemperture:   "enginetemperature",   // spelt this way in the estate
+  odo:                "odometer",
+  oddometer:          "odometer",
+  ododmeter:          "odometer",
+  revolutionsperminute: "rpm",
+  enginespeed:        "rpm",
+  accideint:          "accident",            // spelt this way in the estate
+  accidentindicator:  "accident",
+  fuelcomsumption:    "fuelconsumption",     // spelt this way in the estate
+  vehiclebattary:     "vehiclebattery",
+  vehiclebattaryvolt: "vehiclebattery",
+  totalenginehour:    "totalenginehours",
+  prm:                "rpm",                 // spelt this way in the estate
+};
+const sigKey = s => {
+  const k = String(s).toLowerCase().replace(/[^a-z0-9]+/g, "");
+  return SIG_SAME[k] || k;
+};
 function nicer(a, b){
-  /* Shouting is usually wrong -- "FUEL LEVEL" should lose to "Fuel Level"
-     -- but a short all-caps token is an acronym, not shouting. Preferring
-     mixed case blindly turned ACC into Acc and RPM into Rpm, which reads
-     as a typo rather than a tidy-up. */
+  /* Two different questions wear the same clothes here.
+       "FUEL LEVEL" vs "Fuel Level" -- same word, typed differently, so
+         the better typing wins.
+       "RPM" vs "Revolutions per Minute" -- one is shorthand for the
+         other, so the one that fits on a chip wins.
+     Telling them apart is easy: same letters means formatting, different
+     letters means the alias table merged them. Judging both with one
+     rule put "Revolutions per Minute" on a chip, which is nobody's idea
+     of a summary. */
+  const letters = x => x.toLowerCase().replace(/[^a-z0-9]+/g, "");
   const acronym = x => !/ /.test(x) && x.length <= 4 && x === x.toUpperCase()
                         && /[A-Z]/.test(x);
   const mixed   = x => x !== x.toUpperCase() && x !== x.toLowerCase();
-  const score = x => (/ /.test(x) ? 2 : 0) +
-                     (acronym(x) ? 2 : mixed(x) ? 1 : 0);
-  const d = score(b) - score(a);
-  return d !== 0 ? (d > 0 ? b : a) : (b.length > a.length ? b : a);
+
+  if(letters(a) === letters(b)){
+    const fmt = x => (acronym(x) ? 2 : 0) + (/ /.test(x) ? 2 : 0) +
+                     (mixed(x) ? 1 : 0);
+    const d = fmt(b) - fmt(a);
+    return d !== 0 ? (d > 0 ? b : a) : a;
+  }
+  /* Shorthand: shortest wins, but not if it is shouting or run together
+     -- "ENG-TEMP" is shorter than "Engine Temp" and worse to read. */
+  const rough = x => (x === x.toUpperCase() && x.replace(/[^A-Za-z]/g,"").length > 4)
+                  || (!/[ _-]/.test(x) && x.length > 12);
+  if(rough(a) !== rough(b)) return rough(a) ? b : a;
+  return b.length < a.length ? b : a;
 }
 function foldSignals(list){
   const seen = new Map();
@@ -1593,6 +1645,28 @@ function verdict(files, year){
    the other merely reaches it. Splitting them keeps both -- the older
    file is still the fallback when the closer one fails -- while making it
    obvious which is which. */
+/* A file in the catalogue that nobody has ever fitted still answers a
+   question -- "the file exists, it is just untried" -- but 92% of rows
+   are like that, and on 372 vehicles they are more than half the card.
+   Stacked under a row that says 372 devices they read as failures. Group
+   them, count them, and let them be opened. */
+function splitFitted(files){
+  const on  = files.filter(f => f.f);
+  const off = files.filter(f => !f.f);
+  return [on, off];
+}
+function rowGroup(files, anyFitted){
+  const [on, off] = splitFitted(files);
+  /* Only worth folding when the card has proof somewhere else. On a
+     vehicle nobody has ever fitted, the untried files ARE the answer --
+     collapsing them would leave the page looking like it found nothing. */
+  if(!off.length || !anyFitted)
+    return `<div class="list">${files.map(fileRow).join("")}</div>`;
+  return `<div class="list">${on.map(fileRow).join("")}</div>
+    <button type="button" class="untried" data-untried="1">${
+      esc(T("untried", {n: off.length}))}</button>
+    <div class="list untried-list" hidden>${off.map(fileRow).join("")}</div>`;
+}
 function splitByFit(files, year){
   if(!year) return [files, []];
   const dated = files.filter(f => f.y0);
@@ -1725,8 +1799,12 @@ function renderPick(){
       v.lv.signals.map((s, i) =>
         `<span class="s${i >= SIG_SHOWN ? " hid" : ""}">${bdi(s)}</span>`).join("") +
       (v.lv.signals.length > SIG_SHOWN
-        ? `<button type="button" class="s more" data-more="1">+${
-            v.lv.signals.length - SIG_SHOWN}</button>` : "")}</div>
+        /* "+18" written into an Arabic line comes out as "18+", which
+           reads as "eighteen and over" rather than "eighteen more". Say
+           it in words instead and there is no sign to misplace. */
+        ? `<button type="button" class="s more" data-more="1">${
+            esc(T("sigMore", {n: v.lv.signals.length - SIG_SHOWN}))}</button>`
+        : "")}</div>
       <p style="margin-top:6px">${esc(T((v.cs || v.cm) ? "liveNoteC" : "liveNote"))}</p>`;
   html += `</div>`;
 
@@ -1759,13 +1837,13 @@ function renderPick(){
   if(ownNone) html += crossHtml;
   html += `<h3 class="sec">${wider.length ? T("bestFor",{y:yr}) : T("filesFor")}
       <b>${bdi(mk + " " + md)}</b></h3>
-    <div class="list">${best.map(fileRow).join("") ||
-      `<div class="empty">${T("noFiles")}</div>`}</div>`;
+    ${best.length ? rowGroup(best, !ownNone)
+      : `<div class="list"><div class="empty">${T("noFiles")}</div></div>`}`;
   if(ownNone && cross.length && best.length)
     html += `<div class="note">${esc(T("ownEmpty"))}</div>`;
   if(wider.length)
     html += `<h3 class="sec">${T("widerFor",{y:yr})}</h3>
-      <div class="list">${wider.map(fileRow).join("")}</div>
+      ${rowGroup(wider, !ownNone)}
       <div class="note">${esc(T("widerNote",{y:yr}))}</div>`;
   if(!ownNone) html += crossHtml;
   if(ownNone && !cross.length) html += genericBlock(mk+" "+md);
@@ -2185,6 +2263,12 @@ $("out").addEventListener("click", e => {
   /* The overflow chip. Reveals the rest of the readings in place rather
      than opening anything: the person is mid-scan looking for one sensor
      name, and a panel would lose their place. */
+  const untried = e.target.closest("[data-untried]");
+  if(untried){
+    const list = untried.nextElementSibling;
+    if(list){ list.hidden = false; untried.remove(); }
+    return;
+  }
   const more = e.target.closest("[data-more]");
   if(more){
     const row = more.closest(".live");

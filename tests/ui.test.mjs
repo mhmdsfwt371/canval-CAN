@@ -328,6 +328,50 @@ const run = `
   check("no phantom activity on an empty file",
         phantom.test(store["out"].innerHTML), false);
 
+  // -- shorthand and its long form are one reading -------------------
+  const abbr = verdict([{i:11, n:"F", mk:"F", md:"F", f:5, c:1, s:[],
+    lv:{n:5,k:5,r:5,s:["ENG-TEMP","Engine Temp","Engine Temperature",
+                       "RPM","Revolutions per Minute","ODO","Odometer",
+                       "Accident","accideint"]}}], null);
+  check("nine names, four readings",  abbr.lv.signals.length, 4);
+  check("the chip keeps RPM",         abbr.lv.signals.includes("RPM"), true);
+  check("not the long form",
+        abbr.lv.signals.includes("Revolutions per Minute"), false);
+  check("temperature reads plainly",  abbr.lv.signals.includes("Engine Temp"), true);
+  check("the misspelling is absorbed",
+        abbr.lv.signals.includes("accideint"), false);
+  // The alias table must not swallow things that only look alike: these
+  // are separate axles and separate tanks, not typos of each other.
+  const real = verdict([{i:12, n:"G", mk:"G", md:"G", f:5, c:1, s:[],
+    lv:{n:5,k:5,r:5,s:["Axle Weight","Axle Weight 2","Fuel Level","Fuel Level 2",
+                       "U32 User Defined 0","U32 User Defined 1"]}}], null);
+  check("real distinctions survive",  real.lv.signals.length, 6);
+
+  // -- catalogued but never fitted is background, not a finding -------
+  // Kept visible when it is the only thing the card has to say.
+  state.v = state.v.concat([
+    {i:20, n:"H1", mk:"H", md:"H", f:9, c:1, s:[], y0:2020,
+     lv:{n:9,k:9,r:9,s:["ACC"]}},
+    {i:21, n:"H2", mk:"H", md:"H", f:0, c:0, s:[], y0:2020},
+    {i:22, n:"H3", mk:"H", md:"H", f:0, c:0, s:[], y0:2020},
+    {i:30, n:"J1", mk:"J", md:"J", f:0, c:0, s:[], y0:2020},
+    {i:31, n:"J2", mk:"J", md:"J", f:0, c:0, s:[], y0:2020}]);
+  state.pick = {mk:"H", md:"H", yr:""}; renderPick();
+  check("untried files fold away",
+        store["out"].innerHTML.includes("untried-list"), true);
+  state.pick = {mk:"J", md:"J", yr:""}; renderPick();
+  check("unless they are the whole answer",
+        store["out"].innerHTML.includes("untried-list"), false);
+
+  // -- the overflow chip says how many, in words ---------------------
+  // A bare "+18" inside an Arabic line comes out as "18+", which reads
+  // as an age limit rather than a count.
+  state.pick = {mk:"E", md:"E", yr:""}; renderPick();
+  check("the expander is worded",
+        store["out"].innerHTML.includes(T("sigMore", {n: 18})), true);
+  const label = (store["out"].innerHTML.match(/data-more="1">([^<]*)/) || [])[1];
+  check("and carries no floating sign", label.includes("+"), false);
+
   // -- install: three worlds, and a button that lies in none of them ---
   // Chrome hands over an event, iOS Safari has no API at all, Firefox
   // cannot install. One button that does nothing on two of the three is
