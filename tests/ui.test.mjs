@@ -406,6 +406,24 @@ const run = `
   check("no excuse when the engine runs",
         running.includes(T("parked")), false);
 
+  // A unit heard from hours ago carrying nothing at all is a collection
+  // failure, not a quiet vehicle. Presented as "0 of 8 arriving" it reads
+  // as a verdict about the car, which is the wrong thing to tell a
+  // salesperson looking at a device that is plainly alive.
+  const nowS = Math.floor(Date.now() / 1000);
+  const blind = sensorBlock({i:"3", t: nowS - 4 * 3600,
+    r:[{n:"Device Battery"}, {n:"ACC"}, {n:"RPM"}]});
+  check("a live unit with no readings is flagged",
+        blind.includes(T("blind")), true);
+  check("and is not excused as parked",
+        blind.includes(T("parked")), false);
+  // A unit nobody has heard from in weeks is a different fact, and the
+  // card must not claim a collection fault it cannot show.
+  const stale = sensorBlock({i:"4", t: nowS - 40 * 86400,
+    r:[{n:"Device Battery"}, {n:"ACC"}]});
+  check("an old silent unit is not blamed on us",
+        stale.includes(T("blind")), false);
+
   // -- install: three worlds, and a button that lies in none of them ---
   // Chrome hands over an event, iOS Safari has no API at all, Firefox
   // cannot install. One button that does nothing on two of the three is

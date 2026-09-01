@@ -173,7 +173,10 @@ def readings_of(view) -> list[dict]:
     Values are carried raw. The conversion lives in the payload and
     belongs to the adapter, not here.
     """
-    seen = {p.key: p for p in view.parameters if p.value not in (None, "")}
+    # view.values() rather than view.parameters: a reading with no change
+    # time is still a reading. Asking the narrower list is what made 55
+    # live devices report their own battery as silent.
+    seen = {p.key: p for p in view.values()}
     out = []
     for s in view.specs:
         if not s.name:
@@ -196,7 +199,7 @@ def signals_of(view) -> list[str]:
     value with no sensor configured against it, and nobody asked whether
     sensor_12289 works.
     """
-    present = {p.key for p in view.parameters if p.value not in (None, "")}
+    present = {p.key for p in view.values()}
     return sorted({s.name for s in view.specs
                    if s.param and s.param in present and s.name})
 

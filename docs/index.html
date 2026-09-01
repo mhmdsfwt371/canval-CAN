@@ -301,6 +301,7 @@ bdi{unicode-bidi:isolate}
    otherwise invent a worse one. */
 .parked{margin:-2px 0 7px;font-size:12px;color:var(--muted);
   padding-inline-start:9px;border-inline-start:2px solid var(--line)}
+.parked.bad{color:var(--canh);border-inline-start-color:var(--canh)}
 /* The unit rides with the number but must not compete with it. */
 .dev .s b i{font-style:normal;font-weight:400;font-size:.85em;opacity:.7;
   margin-inline-start:2px}
@@ -576,7 +577,7 @@ const esc = s => (s ?? "").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;")
    the page may be Arabic, and only an isolate keeps them whole. */
 const bdi = s => `<bdi dir="${/[\u0600-\u06FF]/.test(s ?? "") ? "rtl" : "ltr"}">${esc(s)}</bdi>`;
 const THIS_YEAR = new Date().getFullYear();
-const VERSION = "3.12";
+const VERSION = "3.13";
 const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"ar"};
 
 /* What changed, and when. Kept beside the code rather than in a document
@@ -908,6 +909,8 @@ const STR = {
   liveList:   ["واصل:", "Arriving:"],
   parked:     ["الكونتاكت مقفول — طبيعي إن حساسات الموتور تكون ساكتة",
                "Ignition is off \u2014 engine sensors being silent is expected"],
+  blind:      ["الجهاز ده بعت من ساعات ومفيش ولا قراية وصلت — دي مشكلة في القراءة عندنا، مش دليل على العربية.",
+               "This unit reported within hours yet not one reading came through \u2014 that is a collection fault on our side, not evidence about the vehicle."],
   owner:      ["الحساب", "Account"],
   creator:    ["أنشأه", "Created by"],
   liveCount:  ["{n} من {t} حساس بيوصل", "{n} of {t} sensors arriving"],
@@ -2247,6 +2250,14 @@ function sensorBlock(d){
   const mute = rs.filter(r => !(r.v !== undefined && r.v !== null && r.v !== ""));
   const acc  = rs.find(r => /^acc$/i.test(String(r.n || "")));
   const off  = acc && acc.v !== undefined && String(acc.v) === "0";
+  /* A unit that reported hours ago and is carrying nothing at all is not
+     a parked car and not a weak vehicle -- it is a reading we failed to
+     collect. 55 devices in the estate list their own device battery as
+     silent while having reported inside two days, which a powered unit
+     cannot do. Say that plainly instead of letting the card imply the
+     vehicle is the problem. */
+  const heard = d.t && (Date.now() / 1000 - d.t) < 172800;
+  const blind = heard && !live.length && rs.length;
 
   const chips = live.map(r => {
     const f = fmtVal(r.n, r.v);
@@ -2255,7 +2266,8 @@ function sensorBlock(d){
   }).join("");
 
   return `<div class="dcount">${T("liveCount", {n: live.length, t: rs.length})}</div>
-    ${off ? `<div class="parked">${esc(T("parked"))}</div>` : ""}
+    ${blind ? `<div class="parked bad">${esc(T("blind"))}</div>`
+      : off ? `<div class="parked">${esc(T("parked"))}</div>` : ""}
     <div class="chips">${chips ||
       `<span class="s no">${T("noSig")}</span>`}</div>
     ${mute.length ? `<div class="mute"><span>${esc(T("quietList"))}</span> ${

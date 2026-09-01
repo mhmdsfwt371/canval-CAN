@@ -222,10 +222,25 @@ class UnitView:
     specs: list[SensorSpec]
     sensor_change: dict[str, int]
     state: VehicleState = field(default_factory=VehicleState)
+    # Values that arrived without a change time. Kept apart from
+    # `parameters` on purpose: setup_batch() and the monitor both reason
+    # about when a value last moved, and a fabricated timestamp would
+    # corrupt them. Readers that only care WHETHER a value exists use
+    # `values()` below.
+    untimed: list[Parameter] = field(default_factory=list)
 
     @property
     def spec_by_param(self) -> dict[str, SensorSpec]:
         return {s.param: s for s in self.specs if s.param}
+
+    def values(self) -> list[Parameter]:
+        """Everything the unit is actually carrying a value for.
+
+        Use this to answer "is this sensor alive". Use `parameters` only
+        when the question is about when a value last moved.
+        """
+        return [p for p in self.parameters + self.untimed
+                if p.value not in (None, "")]
 
 
 def parse_unit_view(payload: dict) -> UnitView:
@@ -234,11 +249,23 @@ def parse_unit_view(payload: dict) -> UnitView:
 
     dtt, dts = lu.get("dtt"), lu.get("dts")
 
-    params = [
-        Parameter(key=key, value=entry.get("v"), changed_at=int(entry["cdt"]) // 1000)
-        for key, entry in (lu.get("chPrams") or {}).items()
-        if isinstance(entry, dict) and entry.get("cdt")
-    ]
+    # A parameter used to be thrown away whole when it had no `cdt`,
+    # taking its value with it. That is backwards: the value is the fact
+    # and the timestamp is a note about the fact. The estate shows the
+    # cost -- 55 devices that reported within two days list their own
+    # device battery as silent, which a powered, transmitting unit cannot
+    # be. So a value with no change time is kept, just kept separately so
+    # nothing that reasons about age has to see a fabricated zero.
+    params, untimed = [], []
+    for key, entry in (lu.get("chPrams") or {}).items():
+        if not isinstance(entry, dict):
+            continue
+        cdt = entry.get("cdt")
+        if cdt:
+            params.append(Parameter(key=key, value=entry.get("v"),
+                                    changed_at=int(cdt) // 1000))
+        elif entry.get("v") not in (None, ""):
+            untimed.append(Parameter(key=key, value=entry.get("v"), changed_at=0))
 
     sensor_change = {}
     for stype, entries in (lu.get("sensors_chDate") or {}).items():
@@ -262,6 +289,7 @@ def parse_unit_view(payload: dict) -> UnitView:
         last_message=int(dtt) // 1000 if dtt else None,
         server_time=int(dts) // 1000 if dts else None,
         parameters=sorted(params, key=lambda p: -p.changed_at),
+        untimed=untimed,
         specs=parse_sensor_specs(payload),
         sensor_change=sensor_change,
         state=state,
