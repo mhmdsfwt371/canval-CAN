@@ -289,10 +289,22 @@ bdi{unicode-bidi:isolate}
 .dhead .when{margin-inline-start:auto;font-family:var(--mono);font-size:11.5px;
   color:var(--muted)}
 .dev .s b{font-family:var(--mono);font-weight:600;margin-inline-start:4px}
-/* Configured but silent: present enough to read, quiet enough that the
-   working ones are what the eye lands on. */
+/* Configured but silent: named once on a quiet line under the working
+   readings, rather than as chips competing with them. Six grey chips all
+   saying "silent" read as six failures; one line reads as a footnote,
+   which is what it is. */
 .s.quiet{background:transparent;color:var(--muted);border-color:var(--line)}
 .s.quiet b{font-weight:400;opacity:.8}
+.mute{margin-top:7px;font-size:12px;line-height:1.7;color:var(--muted)}
+.mute span{font-weight:600;margin-inline-end:4px}
+/* The reason most of them are silent, said once, where the reader would
+   otherwise invent a worse one. */
+.parked{margin:-2px 0 7px;font-size:12px;color:var(--muted);
+  padding-inline-start:9px;border-inline-start:2px solid var(--line)}
+/* The unit rides with the number but must not compete with it. */
+.dev .s b i{font-style:normal;font-weight:400;font-size:.85em;opacity:.7;
+  margin-inline-start:2px}
+.dev .s .sn{opacity:.85}
 .dcount{font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:6px}
 .dwho{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);
   margin:-3px 0 7px}
@@ -564,7 +576,7 @@ const esc = s => (s ?? "").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;")
    the page may be Arabic, and only an isolate keeps them whole. */
 const bdi = s => `<bdi dir="${/[\u0600-\u06FF]/.test(s ?? "") ? "rtl" : "ltr"}">${esc(s)}</bdi>`;
 const THIS_YEAR = new Date().getFullYear();
-const VERSION = "3.11";
+const VERSION = "3.12";
 const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"ar"};
 
 /* What changed, and when. Kept beside the code rather than in a document
@@ -876,8 +888,12 @@ const STR = {
   anyYear:    ["كل السنوات", "any year"],
   devHead:    ["آخر ٣ أجهزة محدّثة على الملف ده",
                "The 3 most recently reporting devices on this file"],
-  devNote:    ["افتح أي معرّف على البرو وقارن بنفسك. القيم دي خام زي ما وصلت من الجهاز.",
-               "Open any of these on the platform and check for yourself. Values are raw, as they arrived."],
+  /* The note used to promise the values were raw. Two families are now
+     scaled -- battery out of millivolts, odometer out of metres -- so it
+     says which, or it would be quietly untrue the moment someone
+     compares the card against the platform. */
+  devNote:    ["افتح أي معرّف على البرو وقارن بنفسك. البطارية والعداد بس متحوّلين لفولت وكيلومتر؛ باقي القيم خام زي ما وصلت.",
+               "Open any of these on the platform and check for yourself. Battery and odometer are scaled to volts and kilometres; every other value is raw, as it arrived."],
   declared:   ["الإشارات المعلنة في الكتالوج", "Signals the catalogue declares"],
   declShow:   ["وعد الكتالوج ({n} إشارة) — للاطلاع", "What the catalogue promises ({n}) \u2014 if you need it"],
   declHide:   ["إخفاء وعد الكتالوج", "Hide the catalogue promise"],
@@ -886,6 +902,12 @@ const STR = {
   noDevices:  ["مفيش أجهزة اتفحصت على الملف ده لسه.",
                "No devices have been checked on this file yet."],
   silent:     ["ساكت", "silent"],
+  volt:       ["فولت", "V"],
+  km:         ["كم", "km"],
+  quietList:  ["ساكتة:", "Silent:"],
+  liveList:   ["واصل:", "Arriving:"],
+  parked:     ["الكونتاكت مقفول — طبيعي إن حساسات الموتور تكون ساكتة",
+               "Ignition is off \u2014 engine sensors being silent is expected"],
   owner:      ["الحساب", "Account"],
   creator:    ["أنشأه", "Created by"],
   liveCount:  ["{n} من {t} حساس بيوصل", "{n} of {t} sensors arriving"],
@@ -2183,6 +2205,63 @@ $("free").addEventListener("input", () => {
 /* Opening a row shows two different kinds of thing, and the difference is
    the whole point of this tool: what the catalogue promises, and what
    three real devices are actually sending right now. */
+/* The platform sends raw counts. Battery arrives in millivolts, so a
+   healthy 12V car reads "12844"; the odometer arrives in metres, so a
+   truck reads "492447840". Both are correct and both are unreadable, and
+   a salesperson comparing "4055" against "12081" has no way to see that
+   one is a coin cell and the other is the car.
+   Only the two families whose scale is unmistakable are converted.
+   Engine temperature is left alone on purpose: the numbers cluster near
+   122, which is either a J1939 reading offset by 40 (so 82C, normal) or
+   a genuine 122C, and guessing wrong would turn a fine engine into an
+   overheating one on a customer-facing screen. */
+function fmtVal(name, v){
+  const n = String(name || "").toLowerCase();
+  const x = Number(v);
+  if(!isFinite(x) || v === "" || v === null) return {t: String(v), u: ""};
+  if(/batt/.test(n) && x >= 1000 && x <= 60000)
+    return {t: (x / 1000).toFixed(2), u: T("volt")};
+  /* 439 of the 484 odometer readings in the estate are above a million,
+     which can only be metres -- the same field is not kilometres on the
+     other few. Anything under a kilometre stays raw so a freshly fitted
+     device does not just read "0". */
+  if(/(odo|odometer|mileage|total distance)/.test(n) && x >= 1000)
+    return {t: Math.round(x / 1000).toLocaleString("en"), u: T("km")};
+  return {t: x.toLocaleString("en"), u: ""};
+}
+
+/* One device's readings. The old layout gave a silent sensor the same
+   weight as a working one and repeated the word "silent" down the card,
+   so a parked car -- engine off, so of course no RPM and no coolant
+   temperature -- looked like a vehicle where half the sensors had
+   failed. Across the estate 74% of engine sensors report with the
+   ignition on against 40% with it off, so most of that silence was the
+   car being parked, not a fault.
+   Working readings lead. The silent ones collapse into one quiet line,
+   named once, and when the ignition is off the card says so instead of
+   leaving the reader to conclude the worst. */
+function sensorBlock(d){
+  const rs   = d.r || [];
+  if(!rs.length) return `<div class="chips"><span class="s no">${T("noSig")}</span></div>`;
+  const live = rs.filter(r => r.v !== undefined && r.v !== null && r.v !== "");
+  const mute = rs.filter(r => !(r.v !== undefined && r.v !== null && r.v !== ""));
+  const acc  = rs.find(r => /^acc$/i.test(String(r.n || "")));
+  const off  = acc && acc.v !== undefined && String(acc.v) === "0";
+
+  const chips = live.map(r => {
+    const f = fmtVal(r.n, r.v);
+    return `<span class="s"><span class="sn">${bdi(r.n)}</span> <b>${
+      esc(f.t)}${f.u ? `<i>${esc(f.u)}</i>` : ""}</b></span>`;
+  }).join("");
+
+  return `<div class="dcount">${T("liveCount", {n: live.length, t: rs.length})}</div>
+    ${off ? `<div class="parked">${esc(T("parked"))}</div>` : ""}
+    <div class="chips">${chips ||
+      `<span class="s no">${T("noSig")}</span>`}</div>
+    ${mute.length ? `<div class="mute"><span>${esc(T("quietList"))}</span> ${
+      mute.map(r => bdi(r.n)).join(" \u00b7 ")}</div>` : ""}`;
+}
+
 function detail(f){
   const chips = (f.s||[]).map(s => `<span class="s">${bdi(s)}</span>`).join("")
     + (f.x||[]).map(s => `<span class="s no">${bdi(s)}</span>`).join("");
@@ -2224,12 +2303,7 @@ function detail(f){
         ${d.o ? `<span>${T("owner")}: <b>${bdi(d.o)}</b></span>` : ""}
         ${d.cb ? `<span>${T("creator")}: <b>${bdi(d.cb)}</b></span>` : ""}
       </div>` : ""}
-      <div class="dcount">${T("liveCount", {
-        n:(d.r||[]).filter(r => r.v !== undefined).length, t:(d.r||[]).length})}</div>
-      <div class="chips">${(d.r||[]).map(r => r.v !== undefined
-        ? `<span class="s">${bdi(r.n)} <b>${esc(r.v)}</b></span>`
-        : `<span class="s quiet">${bdi(r.n)} <b>${T("silent")}</b></span>`
-      ).join("") || `<span class="s no">${T("noSig")}</span>`}</div>
+      ${sensorBlock(d)}
     </div>`).join("")
     : `<div class="empty">${T("noDevices")}</div>`;
   if(devs.length) html += `<div class="note">${esc(T("devNote"))}</div>`;

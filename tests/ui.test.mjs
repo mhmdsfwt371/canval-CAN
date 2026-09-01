@@ -372,6 +372,40 @@ const run = `
   const label = (store["out"].innerHTML.match(/data-more="1">([^<]*)/) || [])[1];
   check("and carries no floating sign", label.includes("+"), false);
 
+  // -- one device's readings ------------------------------------------
+  // The platform sends millivolts and metres. "4055" beside "12081" gives
+  // no hint that one is a coin cell and the other is the car.
+  const mv = fmtVal("Device Battery", 4055);
+  check("millivolts become volts",   mv.t + mv.u, "4.05" + T("volt"));
+  const car = fmtVal("Vehicle Battery", 12081);
+  check("so does the car battery",   car.t, "12.08");
+  const od = fmtVal("ODO", 1931840);
+  check("metres become kilometres",  od.t + od.u, "1,932" + T("km"));
+  // Scales that are not certain stay untouched: engine temperature
+  // clusters near 122, which is either 82C offset by 40 or a genuine
+  // 122C, and guessing turns a healthy engine into an overheating one.
+  check("temperature is left alone", fmtVal("ENG-TEMP", 122).t, "122");
+  check("and carries no invented unit", fmtVal("ENG-TEMP", 122).u, "");
+  // A reading too small to be metres is not rescaled into nonsense
+  check("a tiny odometer stays raw",  fmtVal("ODO", 220).t, "220");
+
+  // A parked car reports no RPM and no coolant temperature. Presented as
+  // six grey chips it read as six broken sensors; the card now says why.
+  const parked = sensorBlock({i:"1", r:[
+    {n:"ACC", v:0}, {n:"Device Battery", v:4055}, {n:"Vehicle Battery", v:12081},
+    {n:"RPM"}, {n:"ENG-TEMP"}, {n:"Accident"}]});
+  check("the ignition state is stated", parked.includes(T("parked")), true);
+  check("silent sensors get one line",
+        (parked.match(/class="mute"/g) || []).length, 1);
+  check("and are not repeated as chips",
+        (parked.match(/class="s quiet"/g) || []).length, 0);
+  check("each silent sensor is still named",
+        parked.includes("RPM") && parked.includes("Accident"), true);
+  // With the ignition on there is nothing to excuse, so nothing is said.
+  const running = sensorBlock({i:"2", r:[{n:"ACC", v:1}, {n:"RPM", v:800}]});
+  check("no excuse when the engine runs",
+        running.includes(T("parked")), false);
+
   // -- install: three worlds, and a button that lies in none of them ---
   // Chrome hands over an event, iOS Safari has no API at all, Firefox
   // cannot install. One button that does nothing on two of the three is
