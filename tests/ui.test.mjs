@@ -417,6 +417,17 @@ const run = `
         blind.includes(T("blind")), true);
   check("and is not excused as parked",
         blind.includes(T("parked")), false);
+  // "No signals declared" is about the catalogue. Printed because nothing
+  // happened to be arriving, it landed directly above a line naming the
+  // eight declared sensors -- the card contradicting itself twice over.
+  check("declared-but-quiet does not read as undeclared",
+        blind.includes(T("noSig")), false);
+  check("the quiet ones are still named",
+        blind.includes("Device Battery"), true);
+  // It stays where it is actually true: nothing configured at all.
+  check("a unit with nothing configured still says so",
+        sensorBlock({i:"5", t: nowS - 3600, r:[]}).includes(T("noSig")), true);
+
   // A unit nobody has heard from in weeks is a different fact, and the
   // card must not claim a collection fault it cannot show.
   const stale = sensorBlock({i:"4", t: nowS - 40 * 86400,

@@ -577,7 +577,7 @@ const esc = s => (s ?? "").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;")
    the page may be Arabic, and only an isolate keeps them whole. */
 const bdi = s => `<bdi dir="${/[\u0600-\u06FF]/.test(s ?? "") ? "rtl" : "ltr"}">${esc(s)}</bdi>`;
 const THIS_YEAR = new Date().getFullYear();
-const VERSION = "3.13";
+const VERSION = "3.14";
 const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"ar"};
 
 /* What changed, and when. Kept beside the code rather than in a document
@@ -2245,6 +2245,11 @@ function fmtVal(name, v){
    leaving the reader to conclude the worst. */
 function sensorBlock(d){
   const rs   = d.r || [];
+  /* "No signals declared" is a fact about the catalogue, not about the
+     readings. Printing it whenever nothing happened to be arriving put it
+     directly above a line naming the eight sensors that ARE declared and
+     merely quiet -- the card contradicted itself in two consecutive
+     rows. It belongs only where the unit truly has nothing configured. */
   if(!rs.length) return `<div class="chips"><span class="s no">${T("noSig")}</span></div>`;
   const live = rs.filter(r => r.v !== undefined && r.v !== null && r.v !== "");
   const mute = rs.filter(r => !(r.v !== undefined && r.v !== null && r.v !== ""));
@@ -2268,8 +2273,7 @@ function sensorBlock(d){
   return `<div class="dcount">${T("liveCount", {n: live.length, t: rs.length})}</div>
     ${blind ? `<div class="parked bad">${esc(T("blind"))}</div>`
       : off ? `<div class="parked">${esc(T("parked"))}</div>` : ""}
-    <div class="chips">${chips ||
-      `<span class="s no">${T("noSig")}</span>`}</div>
+    ${chips ? `<div class="chips">${chips}</div>` : ""}
     ${mute.length ? `<div class="mute"><span>${esc(T("quietList"))}</span> ${
       mute.map(r => bdi(r.n)).join(" \u00b7 ")}</div>` : ""}`;
 }
