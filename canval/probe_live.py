@@ -42,7 +42,8 @@ import os
 import time
 from collections import defaultdict
 
-from .afaqy import BASE_URL, parse_unit_view
+from .afaqy import BASE_URL
+from .afaqy_auth import get_token, parse_unit_view
 from .store import connect
 
 SCHEMA = """
@@ -214,17 +215,13 @@ def main(argv=None) -> int:
     ap.add_argument("--db", default=os.environ.get("CANVAL_DB", "canval.db"))
     args = ap.parse_args(argv)
 
-    token = os.environ.get("AFAQY_TOKEN", "").strip()
-    if not token:
-        print("  no AFAQY_TOKEN set -- skipping the live check.\n"
-              "  the catalogue and the install index are unaffected.")
-        return 0
-
-    alive, note = token_state(token)
+    # The token the job runs on: the stored one while it lasts, a fresh
+    # login once it does not. See afaqy_auth.
+    token, note = get_token()
     print(f"  {note}")
-    if not alive:
-        print("  skipping the live check. Set a fresh AFAQY_TOKEN secret to "
-              "resume it.")
+    if not token:
+        print("  skipping the live check. Everything else in the job is "
+              "unaffected.")
         return 0
 
     with connect(args.db) as conn:
