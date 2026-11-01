@@ -467,6 +467,33 @@ const run = `
   store["inst-go"].fire("click");
   check("pressing install fires the prompt", fired, true);
 
+  // -- the sheet: every row judged the way the card judges ------------
+  check("make read as typed",             matchMake("Acme").mk, "ACME");
+  check("a misspelt make is flagged",     matchMake("Acmee").how, "close");
+  check("an unknown make is no match",    matchMake("Zeta"), null);
+  check("model found inside extra words", matchModel("ACME", "Truck 4x2 1845", "").md, "TRUCK");
+  check("make typed in the model cell",   matchModel("ACME", "ACME TRUCK", "").md, "TRUCK");
+  check("fitted and reading: supported",  judgeRow({mk:"ACME", md:"TRUCK", yr:"2020"}).dec, "yes");
+  check("nothing anywhere: not supported", judgeRow({mk:"Zeta", md:"Q"}).dec, "no");
+  check("make in the model cell alone",   judgeRow({mk:"", md:"ACME TRUCK"}).md, "TRUCK");
+  const bw = judgeRow({mk:"BETA", md:"WAGON", yr:""});
+  check("borrowed file with more installs leads the setup", bw.rc.f.n, "ACME TRUCK");
+  check("and the reason names it",        bw.why.includes("ACME TRUCK"), true);
+  state.v[0].cf = [["ACME-cfg-LX45", "LX45-EA", 6]];
+  const at = judgeRow({mk:"ACME", md:"TRUCK", yr:"2020", dev:"lx45"});
+  check("the proven configuration is named", at.rc.cfg.nm, "ACME-cfg-LX45");
+  check("and its device",                 at.rc.cfg.hw, "LX45-EA");
+  check("same device is recognised",      hwFit(at.rc.f, "LX45").includes("LX45-EA"), true);
+  check("customer sheet keeps config names out",
+        JSON.stringify(customerRows([at])).includes("ACME-cfg"), false);
+  check("technical sheet carries them",   JSON.stringify(batchRows([at])).includes("ACME-cfg"), true);
+  check("both sheets have one row per vehicle", customerRows([at, bw]).length === 3
+        && batchRows([at, bw]).length === 3, true);
+  state.pick = {mk:"ACME", md:"TRUCK", yr:""}; renderPick();
+  check("the card shows the proven setup", $("out").innerHTML.includes('class="recipe"'), true);
+  check("readings age is measured",       typeof liveAge(), "number");
+  delete state.v[0].cf;
+
   state.pick = {mk:"ACME", md:"TRUCK", yr:""};
   renderPick();
 

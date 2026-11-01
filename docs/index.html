@@ -342,6 +342,50 @@ bdi{unicode-bidi:isolate}
   white-space:normal;word-break:break-all}
 .empty{padding:16px;color:var(--muted);font-size:14px}
 .note{font-size:13px;color:var(--muted);margin:10px 2px 0;max-width:70ch}
+.recipe{margin-top:11px;border:1px solid var(--line);border-radius:3px;background:var(--panel)}
+.recipe .rh{font-size:12.5px;font-weight:600;color:var(--muted);padding:8px 12px 0}
+.rsteps{display:flex;flex-wrap:wrap;gap:0;padding:6px 6px 8px}
+.rs{flex:1 1 180px;min-width:0;padding:6px 8px;border-inline-start:3px solid var(--canl);margin:4px}
+.rs span{display:block;font-size:12px;color:var(--muted)}
+.rs b{display:block;font-family:var(--mono);font-size:13.5px;font-weight:600;overflow-wrap:anywhere}
+.rs i{display:block;font-style:normal;font-size:12px;color:var(--muted)}
+.rnote{font-size:12.5px;color:var(--muted);padding:0 12px 9px}
+.gauge.stale{color:var(--alert)}
+.bbar{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.bbar .tool{padding:8px 14px;font-size:14px;cursor:pointer}
+.bup{background:var(--ink)!important;color:var(--paper)!important;border-color:var(--ink)!important}
+.bmsg{font-size:13.5px;color:var(--muted);margin:6px 2px}
+.bmsg.bad{color:var(--alert)}
+.bsum{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}
+.bf{font-family:var(--sans);font-size:13.5px;background:var(--panel);border:1px solid var(--line);
+  border-radius:20px;padding:5px 12px;cursor:pointer;color:var(--ink)}
+.bf b{font-family:var(--mono)}
+.bf.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.bf.yes b{color:var(--canl)}.bf.trial b{color:var(--canh)}.bf.no b{color:var(--alert)}
+.bf.on b{color:inherit}
+.blist{background:var(--panel);border:1px solid var(--line);border-radius:3px}
+.brow{display:grid;grid-template-columns:28px minmax(0,1fr) minmax(0,1.3fr) auto;gap:12px;
+  align-items:start;padding:11px 14px;border-top:1px solid var(--line)}
+.brow:first-child{border-top:0}
+.brow .bn{font-family:var(--mono);color:var(--muted);font-size:12.5px;padding-top:3px}
+.brow .t{font-weight:600}
+.brow .by{font-family:var(--mono);font-weight:400;color:var(--muted);font-size:13px}
+.brow .d{font-size:12.5px;color:var(--muted);margin-top:3px;overflow-wrap:anywhere}
+.brow .d.mono{font-family:var(--mono);color:var(--ink)}
+.bh{display:inline-block;font-size:11.5px;padding:1px 7px;border-radius:10px;margin-inline-start:4px;
+  background:var(--chip);color:var(--chipT)}
+.bh.close{background:color-mix(in srgb,var(--canh) 22%,transparent);color:var(--ink)}
+.bh.none{background:color-mix(in srgb,var(--alert) 18%,transparent);color:var(--alert)}
+.pill{display:inline-block;font-size:13px;font-weight:600;padding:2px 10px;border-radius:12px}
+.pill.yes{background:color-mix(in srgb,var(--canl) 16%,transparent);color:var(--canl)}
+.pill.trial{background:color-mix(in srgb,var(--canh) 22%,transparent);color:var(--ink)}
+.pill.no{background:color-mix(in srgb,var(--alert) 15%,transparent);color:var(--alert)}
+.bo{cursor:pointer}
+@media (max-width:640px){
+  .brow{grid-template-columns:24px minmax(0,1fr)}
+  .brow .bdec,.brow .bo{grid-column:2}
+  .brow .bo{justify-self:start}
+}
 
 /* ---------------- the guide ---------------- */
 #guide{position:fixed;inset:0;z-index:80;background:rgba(10,14,16,.5);
@@ -531,10 +575,13 @@ footer{border-top:1px solid var(--line);padding:16px 0 40px;font-size:13px;
             aria-selected="false" data-t="tabLeads"></button>
     <button class="tab" role="tab" id="t-new" aria-controls="p-new"
             aria-selected="false" data-t="tabNew"></button>
+    <button class="tab" role="tab" id="t-batch" aria-controls="p-batch"
+            aria-selected="false" data-t="tabBatch"></button>
   </div>
   <section class="panel" id="p-fleet" role="tabpanel"></section>
   <section class="panel" id="p-leads" role="tabpanel" hidden></section>
   <section class="panel" id="p-new" role="tabpanel" hidden></section>
+  <section class="panel" id="p-batch" role="tabpanel" hidden></section>
 </main>
 
 <div id="guide" hidden>
@@ -577,7 +624,7 @@ const esc = s => (s ?? "").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;")
    the page may be Arabic, and only an isolate keeps them whole. */
 const bdi = s => `<bdi dir="${/[\u0600-\u06FF]/.test(s ?? "") ? "rtl" : "ltr"}">${esc(s)}</bdi>`;
 const THIS_YEAR = new Date().getFullYear();
-const VERSION = "3.14";
+const VERSION = "3.15";
 const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"ar"};
 
 /* What changed, and when. Kept beside the code rather than in a document
@@ -586,6 +633,16 @@ const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"a
    about. Newest first. The rule that goes with it: a new version adds,
    it does not quietly change what already worked. */
 const CHANGES = [
+  {v:"3.15", d:"2026-11-02", items:[
+    ["تبويب جديد «رفع شيت عربيات»: تنزّل تمبلت، تكتب فيه العربيات (ماركة، موديل، سنة، جهاز)، ترفعه، وينزلك شيت إكسل فيه لكل عربية: مدعومة ولا محتاجة تجربة ولا غير مدعومة، وليه، والملف والإعداد والجهاز اللي اتركبت بيهم قبل كده، ورسالة جاهزة للعميل. كل سطر بيتحكم عليه بنفس منطق الكارت بالظبط.",
+     "New tab \u201cUpload a vehicle sheet\u201d: download a template, list the vehicles (make, model, year, device), upload it, and get back an Excel sheet saying for each vehicle whether it is supported, needs a trial or is not supported, why, the file, configuration and device it was fitted with, and a message ready for the customer. Every row is judged by exactly the same logic as the card."],
+    ["كل سطر بيقولك الأداة فهمت العربية إزاي («فهمتها: MAN TGX») ودرجة التطابق، وأي تطابق مش أكيد بيتعلّم «قريب — راجع» عشان محدش يرد على عميل بعربية غلط.",
+     "Every row says how the tool read the vehicle (\u201cRead as: MAN TGX\u201d) and how sure the match is; any uncertain match is marked \u201cClose \u2014 check\u201d so nobody answers a customer about the wrong vehicle."],
+    ["الكارت بقى فيه «الطريقة المجرّبة في الأسطول»: ملف الكان والمنفذ، والإعداد اللي عليه أكتر أجهزة، ونوع الجهاز — بدل ما تدوّر بين الملفات.",
+     "The card now shows \u201cThe setup proven in the fleet\u201d: the CAN file and port, the configuration most devices run, and the device type \u2014 instead of hunting through the files."],
+    ["لو قراءات الأجهزة الحية قديمة (مفتاح منصة أفاقي منتهي) الصفحة بتقول كده فوق بدل ما تعرض قراءات قديمة كأنها النهارده.",
+     "When live device readings are stale (the Afaqy platform key has lapsed) the page says so at the top instead of showing old readings as if they were today\u2019s."],
+  ]},
   {v:"2.7", d:"2026-08-10", items:[
     ["عربية ملهاش ملف باسمها بس متركبة فعلًا بملف عربية تانية بقت تطلع «مدعومة» بدل «مفيش عليها ولا تركيبة». الأوتلاندر ٢٠٢٦ مثلًا ماشية على ملف نيسان إكستريل — الصفحة بقت تقول كده وتقولك الملف اللي تبدأ منه، لأن الدليل هو الأجهزة الشغّالة مش اسم الملف.",
      "A vehicle with no file of its own that is nevertheless fitted on another vehicle's file now reads \"supported\" instead of \"never installed on anything\". A 2026 Outlander runs on the Nissan X-Trail file \u2014 the page now says so, and names the file to start from, because the proof is the working devices and not the name on the file."],
@@ -705,6 +762,92 @@ const STR = {
   tabFleet:   ["الأسطول", "Fleet"],
   tabLeads:   ["شغل جاهز", "Ready work"],
   tabNew:     ["ملفات جديدة", "New files"],
+  tabBatch:   ["رفع شيت عربيات", "Upload a vehicle sheet"],
+  rcpHead:    ["الطريقة المجرّبة في الأسطول", "The setup proven in the fleet"],
+  rcpFile:    ["ملف الكان", "CAN file"],
+  rcpFile2:   ["الملف التاني", "Second file"],
+  rcpCfg:     ["الإعداد المستخدم", "Configuration used"],
+  rcpOn:      ["على {n} جهاز", "on {n} devices"],
+  rcpHw:      ["نوع الجهاز", "Device"],
+  rcpCross:   ["العربية دي ملهاش ملف باسمها، والتركيبات الشغّالة ماشية على ملف {f}.", "This vehicle has no file of its own; the working installs run on the {f} file."],
+  gStale:     ["قراءات الأجهزة من {d} يوم", "Device readings {d} days old"],
+  bLead:      ["نزّل التمبلت، اكتب فيه العربيات (الماركة، الموديل، السنة، والجهاز لو حابب)، وارفعه. هيرجعلك شيت فيه لكل عربية: مدعومة ولا محتاجة تجربة ولا غير مدعومة، والملف والإعداد والجهاز اللي اتركبت بيهم قبل كده — جاهز ترد بيه على العميل.", "Download the template, list the vehicles (make, model, year, and the device if you like) and upload it. You get back a sheet with, for every vehicle: supported, needs a trial or not supported, plus the file, configuration and device it was fitted with before — ready to answer the customer with."],
+  bTpl:       ["نزّل التمبلت", "Download the template"],
+  bUp:        ["ارفع الشيت", "Upload the sheet"],
+  bDl:        ["نزّل النتيجة Excel", "Download the result (Excel)"],
+  bReading:   ["بقرا الشيت…", "Reading the sheet…"],
+  bBad:       ["الملف ده مش بيتقري كشيت. ارفع xlsx أو csv.", "That file could not be read as a sheet. Upload an xlsx or csv."],
+  bEmpty:     ["الشيت مفيهوش عربيات. لازم يبقى فيه عمود ماركة وعمود موديل على الأقل.", "No vehicles found. The sheet needs at least a make column and a model column."],
+  bNoLib:     ["مكتبة الإكسل ما اتحملتش — اتأكد إن النت شغال وجرب تاني.", "The Excel library did not load — check the connection and try again."],
+  bStale:     ["تنبيه: قراءات الأجهزة الحية آخر تحديث لها {d}، فخانة «الإشارات» ممكن تكون قديمة. الحكم نفسه مبني على التركيبات والكتالوج.", "Note: live device readings were last refreshed on {d}, so the signals column may be dated. The verdict itself rests on the installs and the catalogue."],
+  bAll:       ["الكل", "All"],
+  bSaw:       ["فهمتها:", "Read as:"],
+  bAlt:       ["أو:", "or:"],
+  bOpen:      ["افتح", "Open"],
+  bShVeh:     ["العربيات", "Vehicles"],
+  bShHelp:    ["طريقة الاستخدام", "How to use"],
+  bShRes:     ["النتيجة", "Result"],
+  bShSum:     ["الملخص", "Summary"],
+  bHelpH:     ["إزاي تملا الشيت", "How to fill the sheet"],
+  bHelp:      ["سطر لكل عربية. الماركة والموديل إجباري، والسنة والجهاز اختياري.\nتقدر تكتب بالعربي أو بالإنجليزي: «مرسيدس أكتروس» زي «MERCEDES ACTROS».\nالموديل ممكن يبقى فيه أرقام زيادة زي «TGX 18.440» — الأداة بتلاقي الموديل جواه.\nخانة الجهاز (زي LX45-EA) بتخلي النتيجة تقولك الملف ده اتركب على نفس الجهاز قبل كده ولا لأ.\nارفع الشيت من تبويب «رفع شيت عربيات»، وراجع أي سطر مكتوب جنبه «قريب — راجع» قبل ما تبعته للعميل.", "One row per vehicle. Make and model are required; year and device are optional.\nArabic or English both work: «مرسيدس أكتروس» is the same as «MERCEDES ACTROS».\nThe model may carry extra digits such as «TGX 18.440» — the tool finds the model inside it.\nThe device column (e.g. LX45-EA) makes the result say whether this file has been fitted on that same device before.\nUpload it from the «Upload a vehicle sheet» tab, and check any row marked «Close — check» before it goes to a customer."],
+  bcMake:     ["الماركة", "Make"],
+  bcModel:    ["الموديل", "Model"],
+  bcYear:     ["سنة الصنع", "Year"],
+  bcDev:      ["الجهاز", "Device"],
+  bcNote:     ["ملاحظات", "Notes"],
+  bxN:        ["م", "#"],
+  bxMk:       ["الماركة في الكتالوج", "Catalogue make"],
+  bxMd:       ["الموديل في الكتالوج", "Catalogue model"],
+  bxHow:      ["دقة التطابق", "Match"],
+  bxDec:      ["القرار", "Decision"],
+  bxWhy:      ["السبب", "Why"],
+  bxFile:     ["ملف الكان", "CAN file"],
+  bxBus:      ["المنفذ", "Port"],
+  bxYrs:      ["سنين الملف", "File years"],
+  bxFit:      ["أجهزة مركّبة", "Devices fitted"],
+  bxCfg:      ["الإعداد المجرّب", "Proven configuration"],
+  bxHw:       ["جهاز الإعداد", "Configuration device"],
+  bxDevFit:   ["توافق جهازك", "Your device"],
+  bxSig:      ["الإشارات", "Signals"],
+  bxCs:       ["التحكم في الأبواب", "Door control"],
+  bxSay:      ["رسالة للعميل", "Message for the customer"],
+  bxAlt:      ["موديلات قريبة", "Similar models"],
+  bxFromCat:  ["(من الكتالوج)", "(from the catalogue)"],
+  bxCsYes:    ["مدعوم — {n} جهاز", "Supported — {n} devices"],
+  bsHead:     ["ملخص الشيت", "Sheet summary"],
+  bsCheck:    ["محتاجة مراجعة تطابق", "Match needs checking"],
+  bsTotal:    ["إجمالي العربيات", "Total vehicles"],
+  bsData:     ["تاريخ بيانات الكتالوج والتركيبات", "Catalogue and installs data as of"],
+  bsLive:     ["آخر قراءات حية من الأجهزة", "Latest live device readings"],
+  bsOld:      ["قديمة من {d} يوم", "{d} days old"],
+  dYes:       ["مدعومة", "Supported"],
+  dTrial:     ["محتاجة تجربة", "Needs a trial"],
+  dNo:        ["غير مدعومة", "Not supported"],
+  mExact:     ["مطابق", "Exact"],
+  mAlias:     ["مطابق من العربي", "Matched from Arabic"],
+  mClose:     ["قريب — راجع", "Close — check"],
+  mNone:      ["مش موجود", "Not found"],
+  rOk:        ["مؤكدة: أجهزة في الأسطول بتبعت قراءات من الكان فعلًا.", "Confirmed: devices in the fleet are sending CAN readings."],
+  rCross:     ["مدعومة على ملف {f}: نفس العربية متركبة عليه وشغالة في الأسطول.", "Supported on the {f} file: this vehicle is fitted on it and running in the fleet."],
+  rPend:      ["متركبة على {n} جهاز في الأسطول، والقراءات الحية لسه ما اتأكدتش.", "Fitted on {n} devices in the fleet; live readings not yet confirmed."],
+  rDead:      ["اتركبت قبل كده ومنصة أفاقي مش شايفة منها قراءات — محتاجة فحص على عربية.", "Fitted before, but the Afaqy platform sees no readings — needs a check on a vehicle."],
+  rNever:     ["ملفها موجود في كتالوج الكان بس متركبتش عندنا قبل كده.", "Its file is in the CAN catalogue but has never been fitted here."],
+  rYear:      ["فيه ملف للموديل بس مش بيغطي سنة {y} (الملفات بتغطي {r}).", "A file exists for the model but not for {y} (files cover {r})."],
+  rGen:       ["{n} جهاز شغالين على العربية دي بالبروتوكول العام {f}.", "{n} devices run this vehicle on the generic protocol {f}."],
+  rGenMk:     ["فيه {n} جهاز {m} شغالين على البروتوكول العام {f}، فالموديل ده يستاهل تجربة عليه.", "{n} {m} devices run on the generic protocol {f}, so this model is worth a trial on it."],
+  bShCust:    ["للعميل", "For the customer"],
+  bShTech:    ["تفاصيل فنية (داخلي)", "Technical (internal)"],
+  bcSigAv:    ["الإشارات المتاحة", "Available signals"],
+  bxNote:     ["ملاحظة", "Note"],
+  bTechNote:  ["الشيت فيه صفحتين: «للعميل» آمنة تتبعت، و«تفاصيل فنية» داخلية لأن أسماء الإعدادات ممكن يكون فيها أسماء عملاء تانيين.", "The file has two sheets: \u201cFor the customer\u201d is safe to send; \u201cTechnical\u201d is internal, because configuration names can carry other customers\u2019 names."],
+  cYes:       ["المركبة مدعومة، ويمكن قراءة بياناتها من شبكة الكان، وهي مجرّبة على مركبات مماثلة لدينا.", "The vehicle is supported: its CAN data can be read, and it is proven on similar vehicles in our fleet."],
+  cTrial:     ["تحتاج المركبة إلى تركيب تجريبي على وحدة واحدة قبل تأكيد الدعم.", "The vehicle needs a trial installation on one unit before support can be confirmed."],
+  cNo:        ["لا يتوفر دعم مؤكد لقراءة بيانات الكان لهذه المركبة حاليًا، ويمكن تقديم التتبع الأساسي بدونها.", "CAN data support is not confirmed for this vehicle at present; basic tracking is available without it."],
+  cDoorYes:   ["متاح", "Available"],
+  rNoMake:    ["الماركة مش موجودة في كتالوج الكان، ومفيش تركيب سابق باسمها.", "The make is not in the CAN catalogue and has no previous install."],
+  rNoModel:   ["الموديل مش موجود تحت الماركة دي في الكتالوج، ومفيش تركيب سابق باسمه.", "The model is not listed under this make and has no previous install."],
+  hwSame:     ["اتركب على نفس الجهاز ({h})", "Fitted on the same device ({h})"],
+  hwOther:    ["اتركب على أجهزة تانية: {h}", "Fitted on other devices: {h}"],
   footNote:   ["عرض آخر الأجهزة المحدّثة جاي مع تسجيل الدخول.",
                "Showing the latest reporting devices needs sign-in; that comes next."],
   stamp:      ["آخر تحديث للبيانات:", "Data last refreshed:"],
@@ -1396,6 +1539,7 @@ function crossFor(mk, md){
   for(const c of hit){
     const at = byFile.get(c.i) || {i: c.i, fl: c.fl, n: 0, a: 0, names: []};
     at.n += c.n; at.a += (c.a || 0);
+    if(!at.hw && c.hw) at.hw = c.hw;
     if(at.names.length < 3) at.names.push(c.nm);
     byFile.set(c.i, at);
   }
@@ -1643,24 +1787,24 @@ function verdict(files, year){
   if(year && !inYear.length){
     const r = [...new Set(files.map(f => f.y0
       ? (f.y1 ? `${f.y0}\u2013${f.y1}` : `${f.y0}+`) : T("allYears")))].join("\u060c ");
-    return {cls:"bad", h:T("vYear",{y:year}), nums:null,
+    return {cls:"bad", k:"year", h:T("vYear",{y:year}), nums:null,
             p:T("vYearP",{r}), inYear:files, lv};
   }
   if(lv.reporting)
-    return {cls:"ok", h:T("vOk"), inYear, lv, cs, cm, p:null,
+    return {cls:"ok", k:"ok", h:T("vOk"), inYear, lv, cs, cm, p:null,
       say:T("sayOk", {s: lv.signals.slice(0,3).join(state.lang === "ar" ? "\u060c " : ", ")}),
       nums:[[fitted,T("nFitted")],[`${lv.reporting} / ${lv.saw}`,T("nSampled")],
             [lv.signals.length,T("nSignals")]]};
   if(fitted && lv.saw)
-    return {cls:"bad", h:T("vDead"), inYear, lv, cs, cm, p:T("vDeadP"), say:T("sayDead"),
+    return {cls:"bad", k:"dead", h:T("vDead"), inYear, lv, cs, cm, p:T("vDeadP"), say:T("sayDead"),
       nums:[[fitted,T("nFitted")],[lv.saw,T("nChecked")],[cfgs,T("nConfigs")]]};
   if(fitted && (active || !actKnown()))
-    return {cls:"warn", h:T("vPend"), inYear, lv, cs, cm, p:T("vPendP"), say:T("sayPend"),
+    return {cls:"warn", k:"pend", h:T("vPend"), inYear, lv, cs, cm, p:T("vPendP"), say:T("sayPend"),
       nums:[[fitted,T("nFitted")],[active,T("nActive")],[cfgs,T("nConfigs")]]};
   if(fitted)
-    return {cls:"warn", h:T("vQuiet"), inYear, lv, cs, cm, p:T("vQuietP"), say:T("sayQuiet"),
+    return {cls:"warn", k:"quiet", h:T("vQuiet"), inYear, lv, cs, cm, p:T("vQuietP"), say:T("sayQuiet"),
       nums:[[fitted,T("nFitted")],[cfgs,T("nConfigs")]]};
-  return {cls:"bad", h:T("vNever"), nums:null, p:T("vNeverP"), say:T("sayNever"),
+  return {cls:"bad", k:"never", h:T("vNever"), nums:null, p:T("vNeverP"), say:T("sayNever"),
           inYear, lv};
 }
 
@@ -1702,10 +1846,10 @@ function splitByFit(files, year){
   return wider.length ? [best, wider] : [files, []];
 }
 
-function renderPick(){
-  state.mine = null;
-  const {mk, md, yr} = state.pick || {};
-  if(!mk || !md){ if(!state.free) $("out").innerHTML = ""; return; }
+/* The whole answer for one car, with no page attached. The card below
+   and the spreadsheet both ask through here, so a row in a customer's
+   sheet can never be told something the card would not say. */
+function assess(mk, md, yr){
   const files = filesFor(mk, md);
   const v = verdict(files, yr ? +yr : null);
   // Nothing of its own, but somebody is running it on another file: the
@@ -1742,6 +1886,7 @@ function renderPick(){
     const mine = ownN + crossN;
 
     v.cls = bv.cls === "bad" && mine ? "warn" : bv.cls;
+    v.k = bv.cls === "bad" && mine ? "pend" : bv.k;
     v.lv = bv.lv;
     if(bv.nums && bv.nums.length){
       v.nums = bv.nums.map(n => [...n]);
@@ -1769,6 +1914,7 @@ function renderPick(){
     v.cm = cmFrom ? {n: cmFrom.cm.n, s: cmFrom.cm.s} : null;
 
     if(!ownN){
+      v.k = "cross";
       v.h = T("vCross");
       v.p = T("vCrossP", {f: top.fl});
       v.say = T("sayCross", {n: crossN, f: top.fl});
@@ -1779,6 +1925,14 @@ function renderPick(){
       v.p = (v.p ? v.p + " " : "") + T("alsoCross", {n: crossN, f: top.fl});
     }
   }
+  return {files, v, cross};
+}
+
+function renderPick(){
+  state.mine = null;
+  const {mk, md, yr} = state.pick || {};
+  if(!mk || !md){ if(!state.free) $("out").innerHTML = ""; return; }
+  const {v, cross} = assess(mk, md, yr);
 
   const seeQ = encodeURIComponent([mk, md, yr].filter(Boolean).join(" "));
   let html = `<button class="back" id="back">&#8629; ${T("back")}</button>
@@ -1793,6 +1947,7 @@ function renderPick(){
     .map(([n,l]) => `<span><b>${n}</b> ${esc(l)}</span>`).join("")}</div>`;
   if(v.p) html += `<p>${esc(v.p)}</p>`;
   if(v.say) html += `<div class="say"><span>${T("say")}</span>${esc(v.say)}</div>`;
+  html += recipeHtml(recipe({v, cross}, md));
   /* Two facts, one box. The script says the device can drive the lock;
      the command says an operator can reach it. Sales needs the second
      sentence more than the first: a car with the script and no button
@@ -2108,7 +2263,11 @@ function panels(){
   $("gauges").innerHTML = `
     <div class="gauge"><b>${m.files.toLocaleString("en")}</b> ${T("gFiles")}</div>
     <div class="gauge"><b>${m.fitted_devices.toLocaleString("en")}</b>
-      ${T("gOf")} ${m.devices.toLocaleString("en")} ${T("gFitted")}</div>`;
+      ${T("gOf")} ${m.devices.toLocaleString("en")} ${T("gFitted")}</div>${
+    (() => { const d = liveAge();
+      return d !== null && d > 3 ? `<div class="gauge stale" title="${esc(liveDate())}">${
+        T("gStale", {d})}</div>` : ""; })()}`;
+  batchPanel();
 
   $("p-fleet").innerHTML = `<p class="lead">${esc(T("fleetLead"))}</p>
     <div class="list">${f.estate.map(r => `<div class="row">
@@ -2384,6 +2543,528 @@ document.querySelectorAll(".tab").forEach(tab => {
   });
 });
 
+
+/* ==================================================================
+   The proven setup, and the spreadsheet.
+
+   "Supported" was half an answer. The other half is what a person
+   actually does next: which CAN file, on which port, with which
+   configuration, on which device. recipe() names it from the devices
+   that already run it -- never from the catalogue alone.
+
+   The sheet is the same question asked forty times. Every row goes
+   through assess(), the function the card uses, so a customer's sheet
+   cannot be told anything the card would not say. */
+function cfgOf(f, md){
+  const list = (f.cf || []).map(([nm, hw, n]) => ({nm, hw, n}));
+  if(list.length){
+    const w = terms(md || "").filter(x => x.length > 2);
+    const named = w.length && list.find(c => w.every(x => fold(c.nm).includes(x)));
+    return named || list[0];
+  }
+  const d = f.lv && f.lv.d && f.lv.d.find(x => x.c);
+  return d ? {nm: d.c, hw: null, n: null} : null;
+}
+function recipe(a, md){
+  const v = a.v, cross = a.cross || [];
+  /* Own files and borrowed ones compete on the same terms: the Outlander
+     has one device on its own V2 file and twenty-one on the X-TRAIL file,
+     and the setup to copy is the one that is working, not the one whose
+     name matches. */
+  const pool = (v.inYear || []).filter(f => f.f).map(f => ({f, via: "own", n: f.f}))
+    .concat(cross.map(c => ({f: state.v.find(x => x.i === c.i), via: "cross", c, n: c.n}))
+                 .filter(x => x.f && !(v.inYear || []).includes(x.f)));
+  if(!pool.length) return null;
+  /* A borrowed file's readings belong to the other vehicles on it, so
+     only a car's own file earns the live-reading lead. */
+  const rank = x => (x.via === "own" && x.f.lv && x.f.lv.r ? 1e6 : 0) + x.n;
+  pool.sort((p, q) => rank(q) - rank(p));
+  const top = pool[0];
+  const other = top.via === "own" && pool.find(x => x !== top && x.f.b && top.f.b
+                                                && x.f.b !== top.f.b);
+  const cfg = top.via === "cross"
+    ? {nm: top.c.names[0], hw: top.c.hw || null, n: top.c.n}
+    : cfgOf(top.f, md);
+  return {f: top.f, via: top.via, n: top.n, cfg, other: other ? other.f : null};
+}
+const yrsOf = f => f.y0 ? (f.y1 ? `${f.y0}\u2013${f.y1}` : `${f.y0}+`) : T("allYears");
+function recipeHtml(r){
+  if(!r) return "";
+  const step = (k, val, sub) => `<div class="rs"><span>${esc(k)}</span><b>${bdi(val)}</b>${
+    sub ? `<i>${esc(sub)}</i>` : ""}</div>`;
+  return `<div class="recipe"><div class="rh">${esc(T("rcpHead"))}</div><div class="rsteps">${
+    step(T("rcpFile"), r.f.n, (r.f.b ? "CAN" + r.f.b + " \u00b7 " : "") + yrsOf(r.f))}${
+    r.other ? step(T("rcpFile2"), r.other.n, "CAN" + r.other.b) : ""}${
+    r.cfg ? step(T("rcpCfg"), r.cfg.nm, r.cfg.n ? T("rcpOn", {n: r.cfg.n}) : "") : ""}${
+    r.cfg && r.cfg.hw ? step(T("rcpHw"), r.cfg.hw, "") : ""}</div>${
+    r.via === "cross" ? `<div class="rnote">${esc(T("rcpCross", {f: r.f.n}))}</div>` : ""}</div>`;
+}
+
+/* When the readings were last taken. The platform token runs out every
+   month and the nightly job carries on without it -- green tick and
+   all -- so the page has to say how old the readings are, or two-month
+   old silence gets read as today's. */
+function liveAge(){
+  let t = 0;
+  for(const f of state.v) for(const d of (f.lv && f.lv.d) || []) if(d.t > t) t = d.t;
+  return t ? Math.floor((Date.now() / 1000 - t) / 86400) : null;
+}
+const liveDate = () => {
+  let t = 0;
+  for(const f of state.v) for(const d of (f.lv && f.lv.d) || []) if(d.t > t) t = d.t;
+  return t ? new Date(t * 1000).toISOString().slice(0, 10) : "";
+};
+
+/* ---------------------------------------------------- reading a row */
+const squash = s => fold(s).replace(/\s+/g, "");
+function lev(a, b){
+  if(Math.abs(a.length - b.length) > 2) return 9;
+  const d = Array.from({length: b.length + 1}, (_, i) => i);
+  for(let i = 1; i <= a.length; i++){
+    let prev = d[0]; d[0] = i;
+    for(let j = 1; j <= b.length; j++){
+      const t = d[j];
+      d[j] = Math.min(d[j] + 1, d[j-1] + 1, prev + (a[i-1] === b[j-1] ? 0 : 1));
+      prev = t;
+    }
+  }
+  return d[b.length];
+}
+const AR = s => /[\u0600-\u06FF]/.test(s || "");
+/* The make, from whatever the customer typed: "Mercedes-Benz", "مرسيدس",
+   "MAN Truck". Exact beats partial beats a near spelling, and a near
+   spelling is always flagged -- a guessed make is how a sheet goes back
+   to a customer with the wrong car on it. */
+function matchMake(raw){
+  const t = terms(raw).filter(w => !AR(w)), q = t.join("");
+  if(!q) return null;
+  const all = state.makes;
+  const ex = all.find(m => squash(m.value) === q);
+  if(ex) return {mk: ex.value, how: AR(raw) ? "alias" : "exact"};
+  /* A make is a whole word, or the first words run together ("LAND
+     ROVER"). A prefix of a longer word is not: "Acmee" is a misspelling
+     to flag, not ACME to accept. */
+  const lead = [1, 2, 3].map(k => t.slice(0, k).join(""));
+  const word = all.filter(m => t.includes(fold(m.value)) || lead.includes(squash(m.value)));
+  if(word.length){
+    word.sort((a, b) => squash(b.value).length - squash(a.value).length || (b.count||0) - (a.count||0));
+    return {mk: word[0].value, how: AR(raw) ? "alias" : "exact"};
+  }
+  const pre = q.length >= 3 && all.filter(m => squash(m.value).startsWith(q));
+  if(pre && pre.length === 1) return {mk: pre[0].value, how: "close"};
+  const near = all.map(m => ({m, d: lev(squash(m.value), q)}))
+    .filter(x => x.d <= (q.length >= 6 ? 2 : q.length >= 5 ? 1 : 0)).sort((a, b) => a.d - b.d);
+  return near.length ? {mk: near[0].m.value, how: "close"} : null;
+}
+/* The model, inside one make. The catalogue writes "ACTROS", the sheet
+   says "Actros 1845 LS"; the catalogue writes "TGX", the sheet says
+   "TGX 18.440". The longest catalogue name found inside what was typed
+   wins, because it is the most specific one -- and when two fit, the
+   others are reported, not dropped. */
+function matchModel(mk, raw, makeRaw){
+  const opts = new Map();
+  for(const v of state.v){
+    if(v.g || v.mk !== mk) continue;
+    const k = baseModel(v.md || v.n);
+    opts.set(k, (opts.get(k) || 0) + (v.f || 0));
+  }
+  const list = [...opts.entries()].map(([md, n]) => ({md, n, s: squash(md)}));
+  const mkS = squash(mk);
+  // Arabic goes through the alias table first: "النترا" is asked as ELANTRA.
+  let q = AR(raw) ? terms(raw).filter(w => !AR(w)).join("") : squash(raw);
+  if(q.startsWith(mkS)) q = q.slice(mkS.length);       // "MAN TGX" in the model cell
+  const mq = squash(makeRaw);
+  if(mq && q.startsWith(mq)) q = q.slice(mq.length);
+  if(!q) return null;
+  const ex = list.find(o => o.s === q);
+  // Exact still names its neighbours: ZS is a car, and so is ZST beside it
+  // with a thousand installs -- the person sending the sheet decides.
+  if(ex) return {md: ex.md, how: "exact",
+    alts: list.filter(o => o !== ex && o.s.startsWith(q) && o.n).map(o => o.md).slice(0, 3)};
+  /* Truck names: the sheet says R450 or G410 (series letter + power), the
+     catalogue says R-Series. Matched, and always flagged for review. */
+  const sm = /^([a-z])\d{3}/.exec(q);
+  if(sm){
+    const ser = list.filter(o => o.s.startsWith(sm[1] + "series"))
+      .sort((a, b) => a.s.length - b.s.length || b.n - a.n);
+    if(ser.length) return {md: ser[0].md, how: "close", alts: ser.slice(1, 3).map(o => o.md)};
+  }
+  const inside = list.filter(o => o.s.length >= 2 && q.includes(o.s))
+    .sort((a, b) => b.s.length - a.s.length || b.n - a.n);
+  if(inside.length){
+    const best = inside[0];
+    const alts = inside.filter(o => o !== best && o.s.length === best.s.length).map(o => o.md);
+    return {md: best.md, how: q.startsWith(best.s) && !alts.length ? "exact" : "close", alts};
+  }
+  const wider = list.filter(o => q.length >= 3 && o.s.startsWith(q)).sort((a, b) => b.n - a.n);
+  if(wider.length)
+    return {md: wider[0].md, how: wider.length === 1 ? "exact" : "close",
+            alts: wider.slice(1, 4).map(o => o.md)};
+  const near = list.map(o => ({o, d: lev(o.s, q)}))
+    .filter(x => x.d <= (q.length >= 5 ? 2 : 1)).sort((a, b) => a.d - b.d || b.o.n - a.o.n);
+  return near.length ? {md: near[0].o.md, how: "close", alts: near.slice(1, 3).map(x => x.o.md)} : null;
+}
+/* Configurations on the generic protocol whose names say this vehicle.
+   That is the truck path: no file under its own name, and twenty of
+   them already running J1939 under a name a human typed. */
+function genericFor(mk, model){
+  const w = terms(model).filter(x => x.length > 2 && !AR(x));
+  if(!w.length) return null;
+  const mw = mk ? fold(mk) : "";
+  const hit = state.cfg.filter(c => w.every(x => c._h.includes(x)) &&
+    (!mw || c._h.includes(mw) || w.some(x => x.length >= 4)));
+  if(!hit.length) return null;
+  const n = hit.reduce((s, c) => s + c.n, 0);
+  return {n, fl: hit[0].fl, nm: hit[0].nm};
+}
+function genericMake(mk){
+  const mw = fold(mk || "");
+  if(mw.length < 3) return null;
+  const hit = state.cfg.filter(c => c._h.includes(mw));
+  return hit.length ? {n: hit.reduce((s, c) => s + c.n, 0), fl: hit[0].fl} : null;
+}
+function yearOf(raw){
+  const m = /(19[89]\d|20\d\d)/.exec(String(raw || ""));
+  const y = m ? +m[1] : null;
+  return y && y <= THIS_YEAR + 1 ? y : null;
+}
+function hwFit(f, dev){
+  const d = squash(dev);
+  if(!d || !f) return "";
+  const hws = (f.hw || []).concat(f.cf ? f.cf.filter(c => c[1]).map(c => [c[1], c[2]]) : []);
+  if(!hws.length) return "";
+  const same = hws.find(([h]) => { const s = squash(h); return s && (s.includes(d) || d.includes(s)); });
+  return same ? T("hwSame", {h: same[0]})
+              : T("hwOther", {h: [...new Set(hws.map(x => x[0]))].slice(0, 3).join("\u060c ")});
+}
+
+/* One row of the sheet, judged. */
+function judgeRow(row){
+  const out = {in: row, how: "none", alts: [], dec: "no", why: "", mk: "", md: ""};
+  const yr = yearOf(row.yr);
+  out.yr = yr;
+  let mm = matchMake(row.mk);
+  let modelRaw = row.md;
+  if(!mm && !row.mk && row.md){                 // "Mercedes Actros" in one cell
+    mm = matchMake(String(row.md).split(/\s+/)[0]);
+  }
+  if(!mm){
+    const g = genericFor("", [row.mk, row.md].join(" "));
+    if(g){ out.dec = "yes"; out.why = T("rGen", {n: g.n, f: g.fl}); out.gen = g; }
+    else out.why = T("rNoMake");
+    return out;
+  }
+  out.mk = mm.mk;
+  const md = matchModel(mm.mk, modelRaw, row.mk);
+  if(!md){
+    out.how = "none";
+    const crossOnly = crossFor(mm.mk, modelRaw || "");
+    const g = genericFor(mm.mk, modelRaw || "");
+    if(crossOnly.length){
+      const c = crossOnly[0], f = state.v.find(x => x.i === c.i);
+      out.dec = "yes"; out.how = mm.how === "close" ? "close" : "exact";
+      out.why = T("rCross", {f: c.fl});
+      out.rc = f ? {f, via: "cross", n: c.n, cfg: {nm: c.names[0], hw: c.hw || null, n: c.n}} : null;
+    }else if(g){
+      out.dec = "yes"; out.why = T("rGen", {n: g.n, f: g.fl}); out.gen = g;
+    }else{
+      out.why = T("rNoModel");
+      const gm = genericMake(mm.mk);
+      if(gm){ out.dec = "trial"; out.why += " " + T("rGenMk", {n: gm.n, m: mm.mk, f: gm.fl}); }
+    }
+    return out;
+  }
+  out.md = md.md; out.alts = md.alts || [];
+  out.how = mm.how === "close" || md.how === "close" ? "close"
+          : mm.how === "alias" ? "alias" : "exact";
+  const a = assess(mm.mk, md.md, yr);
+  const v = a.v;
+  out.v = v; out.rc = recipe(a, md.md);
+  out.sig = (v.lv && v.lv.signals) || [];
+  out.cat = [...new Set(v.inYear.flatMap(f => f.s || []))];
+  out.cs = v.cs ? v.cs.n : 0;
+  out.say = v.say || "";
+  const fitted = v.inYear.reduce((s, f) => s + (f.f || 0), 0);
+  if(v.k === "cross"){ out.dec = "yes"; out.why = T("rCross", {f: a.cross[0].fl}); }
+  else if(v.k === "ok"){ out.dec = "yes"; out.why = T("rOk"); }
+  else if(v.k === "pend" || v.k === "quiet"){
+    out.dec = "yes";
+    out.why = out.rc && out.rc.via === "cross" ? T("rCross", {f: out.rc.f.n}) : T("rPend", {n: fitted});
+  }
+  else if(v.k === "dead"){ out.dec = "trial"; out.why = T("rDead"); }
+  else if(v.k === "year"){
+    out.dec = "trial";
+    out.why = T("rYear", {y: yr, r: [...new Set(a.files.map(yrsOf))].join("\u060c ")});
+  }else{ out.dec = "trial"; out.why = T("rNever"); }
+  // The working setup is on another vehicle's file: that is the sentence
+  // the person answering the customer needs, whatever colour the card is.
+  if(out.dec === "yes" && out.rc && out.rc.via === "cross")
+    out.why = T("rCross", {f: out.rc.f.n});
+  if(out.dec !== "yes"){
+    const g = genericFor(mm.mk, md.md);
+    if(g){ out.dec = "yes"; out.why += " \u2014 " + T("rGen", {n: g.n, f: g.fl}); out.gen = g; }
+    else{ const gm = genericMake(mm.mk);
+      if(gm) out.why += " " + T("rGenMk", {n: gm.n, m: mm.mk, f: gm.fl}); }
+  }
+  return out;
+}
+
+/* ------------------------------------------------- the sheet itself */
+const XLSX_SRC = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+const XLSX_SRI = "sha512-r22gChDnGvBylk90+2e/ycr3RVrDi8DIOkIGNhJlKfuyQM4tIRAI062MaV8sfjQKYVGjOBaZBOA87z+IhZE9DA==";
+let xlsxP = null;
+function needXlsx(){
+  if(window.XLSX) return Promise.resolve(window.XLSX);
+  return xlsxP || (xlsxP = new Promise((res, rej) => {
+    const s = document.createElement("script");
+    s.src = XLSX_SRC; s.integrity = XLSX_SRI; s.crossOrigin = "anonymous";
+    s.onload = () => res(window.XLSX);
+    s.onerror = () => { xlsxP = null; rej(new Error("xlsx")); };
+    document.head.appendChild(s);
+  }));
+}
+function sheetOut(XLSX, name, aoa, widths){
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws["!cols"] = widths.map(w => ({wch: w}));
+  if(aoa.length > 1) ws["!autofilter"] = {ref: XLSX.utils.encode_range(
+    {s: {r: 0, c: 0}, e: {r: aoa.length - 1, c: aoa[0].length - 1}})};
+  return [name, ws];
+}
+function bookOut(XLSX, sheets, file){
+  const wb = XLSX.utils.book_new();
+  for(const [n, ws] of sheets) XLSX.utils.book_append_sheet(wb, ws, n);
+  wb.Workbook = {Views: [{RTL: state.lang === "ar"}]};
+  XLSX.writeFile(wb, file);
+}
+async function downloadTemplate(){
+  let XLSX;
+  try{ XLSX = await needXlsx(); }catch{ return batchMsg(T("bNoLib"), true); }
+  const H = [T("bcMake"), T("bcModel"), T("bcYear"), T("bcDev"), T("bcNote")];
+  const rows = [H,
+    ["MERCEDES", "ACTROS", 2020, "LX45-EA", ""],
+    ["MAN", "TGX", 2025, "LX45-EA", ""],
+    ["TOYOTA", "HILUX", 2022, "", ""],
+    ["هيونداي", "النترا", 2019, "", ""]];
+  const help = [[T("bHelpH")], ...T("bHelp").split("\n").map(x => [x])];
+  bookOut(XLSX, [sheetOut(XLSX, T("bShVeh"), rows, [16, 22, 12, 16, 28]),
+                 sheetOut(XLSX, T("bShHelp"), help, [110])], "canval-template.xlsx");
+}
+function headerMap(rows){
+  const tests = {
+    yr: /سنه|سنة|year|عام|موديل سنه/i,
+    dev: /جهاز|device|hardware|unit|tracker/i,
+    mk: /ماركه|مارك|الشركه|الصانع|make|brand|manufacturer|oem/i,
+    md: /موديل|طراز|model|type/i,
+  };
+  for(let r = 0; r < Math.min(rows.length, 10); r++){
+    const cells = rows[r].map(c => fold(c));
+    const m = {};
+    cells.forEach((c, i) => {
+      if(!c) return;
+      if(m.yr === undefined && tests.yr.test(c)) m.yr = i;
+      else if(m.dev === undefined && tests.dev.test(c)) m.dev = i;
+      else if(m.mk === undefined && tests.mk.test(c)) m.mk = i;
+      else if(m.md === undefined && tests.md.test(c)) m.md = i;
+    });
+    if(m.mk !== undefined && m.md !== undefined) return {row: r, m};
+  }
+  return {row: -1, m: {mk: 0, md: 1, yr: 2, dev: 3}};
+}
+async function readSheet(file){
+  const XLSX = await needXlsx();
+  const wb = XLSX.read(await file.arrayBuffer(), {type: "array"});
+  const name = wb.SheetNames.find(n => {
+    const r = XLSX.utils.sheet_to_json(wb.Sheets[n], {header: 1, defval: ""});
+    return r.some(x => x.some(c => String(c).trim()));
+  }) || wb.SheetNames[0];
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], {header: 1, raw: false, defval: ""});
+  const {row, m} = headerMap(rows);
+  const cell = (r, k) => m[k] === undefined ? "" : String(r[m[k]] ?? "").trim();
+  return rows.slice(row + 1)
+    .map(r => ({mk: cell(r, "mk"), md: cell(r, "md"), yr: cell(r, "yr"), dev: cell(r, "dev")}))
+    .filter(r => r.mk || r.md).slice(0, 3000);
+}
+const DEC = {yes: "dYes", trial: "dTrial", no: "dNo"};
+const HOW = {exact: "mExact", alias: "mAlias", close: "mClose", none: "mNone"};
+function batchRows(res){
+  const head = [T("bxN"), T("bcMake"), T("bcModel"), T("bcYear"), T("bcDev"),
+    T("bxMk"), T("bxMd"), T("bxHow"), T("bxDec"), T("bxWhy"), T("bxFile"), T("bxBus"),
+    T("bxYrs"), T("bxFit"), T("bxCfg"), T("bxHw"), T("bxDevFit"), T("bxSig"),
+    T("bxCs"), T("bxSay"), T("bxAlt")];
+  const sep = state.lang === "ar" ? "\u060c " : ", ";
+  const body = res.map((r, i) => {
+    const rc = r.rc, f = rc && rc.f;
+    const sig = r.sig && r.sig.length ? r.sig.slice(0, 14).join(sep)
+      : r.cat && r.cat.length ? T("bxFromCat") + " " + r.cat.slice(0, 14).join(sep) : "";
+    return [i + 1, r.in.mk, r.in.md, r.in.yr, r.in.dev,
+      r.mk, r.md, T(HOW[r.how]), T(DEC[r.dec]), r.why,
+      f ? f.n : (r.gen ? r.gen.fl : ""), f && f.b ? "CAN" + f.b + (rc.other ? " + CAN" + rc.other.b : "") : "",
+      f ? yrsOf(f) : "", rc ? rc.n : (r.gen ? r.gen.n : ""),
+      rc && rc.cfg ? rc.cfg.nm : (r.gen ? r.gen.nm : ""), rc && rc.cfg && rc.cfg.hw ? rc.cfg.hw : "",
+      r.in.dev ? hwFit(f, r.in.dev) : "", sig,
+      r.cs ? T("bxCsYes", {n: r.cs}) : "", r.say || "", (r.alts || []).join(sep)];
+  });
+  return [head, ...body];
+}
+/* What a customer reads in the signals column. Only vehicle readings,
+   in the words the Saudi market uses; the tracker's own battery, spare
+   outputs and "U32 User Defined" slots mean nothing to a fleet manager
+   and are left out rather than translated badly. Keyed on letters only,
+   so "Fuel Level (J1939)", "FUEL LEVEL" and "Fuel Level*" are one row. */
+const SIG_CUST = {
+  enginespeed:["سرعة دوران المحرك","Engine speed (RPM)"], rpm:["سرعة دوران المحرك","Engine speed (RPM)"],
+  enginetemperature:["حرارة المحرك","Engine temperature"], enginetemp:["حرارة المحرك","Engine temperature"],
+  engtemp:["حرارة المحرك","Engine temperature"], enginetemperture:["حرارة المحرك","Engine temperature"],
+  fuelconsumption:["استهلاك الوقود","Fuel consumption"], totalfuelused:["استهلاك الوقود","Fuel consumption"],
+  totalfuel:["استهلاك الوقود","Fuel consumption"], fuelrate:["معدل استهلاك الوقود","Fuel rate"],
+  instantfuelconsumptionrate:["معدل استهلاك الوقود","Fuel rate"], instantfueleconomy:["معدل استهلاك الوقود","Fuel rate"],
+  fuellevel:["مستوى الوقود","Fuel level"], fuel:["مستوى الوقود","Fuel level"], fuellevelltr:["مستوى الوقود","Fuel level"],
+  ignition:["تشغيل المحرك (الكونتاكت)","Ignition"], acc:["تشغيل المحرك (الكونتاكت)","Ignition"],
+  vehiclespeed:["سرعة المركبة","Vehicle speed"], speed:["سرعة المركبة","Vehicle speed"],
+  totaldistancemileage:["العداد (الكيلومترات)","Odometer"], odo:["العداد (الكيلومترات)","Odometer"],
+  odometer:["العداد (الكيلومترات)","Odometer"], totalodometer:["العداد (الكيلومترات)","Odometer"],
+  totaldistancehighresolution:["العداد (الكيلومترات)","Odometer"],
+  brakepedalswitch:["دواسة الفرامل","Brake pedal"], parkingbrake:["فرامل اليد","Parking brake"],
+  acceleratorposition:["دواسة البنزين","Accelerator pedal"],
+  doorfrontleft:["الأبواب","Doors"], doorfrontright:["الأبواب","Doors"], doorrearleft:["الأبواب","Doors"],
+  doorrearright:["الأبواب","Doors"], driverdoor:["الأبواب","Doors"],
+  trunkcover:["الشنطة","Trunk"], enginecover:["الكبوت","Bonnet"],
+  driverseatbeltindicator:["حزام الأمان","Seat belt"], passengerseatbeltindicator:["حزام الأمان","Seat belt"], seatbelt:["حزام الأمان","Seat belt"],
+  headlightindicator:["الأنوار","Lights"], highbeamlampindicator:["الأنوار","Lights"], taillightindicator:["الأنوار","Lights"],
+  checkenginewarning:["لمبات التحذير في الطبلون","Dashboard warnings"], espwarning:["لمبات التحذير في الطبلون","Dashboard warnings"],
+  airbagwarning:["لمبات التحذير في الطبلون","Dashboard warnings"], abswarning:["لمبات التحذير في الطبلون","Dashboard warnings"],
+  brakesystemwarning:["لمبات التحذير في الطبلون","Dashboard warnings"], oilpressurewarning:["لمبات التحذير في الطبلون","Dashboard warnings"],
+  enginehours:["ساعات تشغيل المحرك","Engine hours"], totalenginehours:["ساعات تشغيل المحرك","Engine hours"],
+  engineload:["حمل المحرك","Engine load"], adbluelevel:["مستوى الأدبلو","AdBlue level"],
+  vehiclebattery:["جهد بطارية المركبة","Vehicle battery voltage"], locked:["حالة قفل الأبواب","Door lock status"],
+  cruisecontrol:["مثبت السرعة","Cruise control"], keyinserted:["المفتاح في الكونتاكت","Key inserted"],
+  diagnostictroublecodes:["أكواد الأعطال","Fault codes"], ambienttemperature:["الحرارة الخارجية","Outside temperature"],
+  tirepressurewarning:["تحذير ضغط الإطارات","Tyre pressure warning"], clutchpedalswitch:["دواسة الدبرياج","Clutch pedal"],
+  oilpressure:["ضغط الزيت","Oil pressure"], airconditioningon:["تشغيل المكيف","Air conditioning"],
+  lowfuellevelwarning:["تحذير الوقود المنخفض","Low fuel warning"], axleweight:["الأوزان","Weights"],
+  weight:["الأوزان","Weights"], grossvehicleweight:["الأوزان","Weights"], currentgear:["الغيار الحالي","Current gear"],
+  ptostate:["تشغيل الباور تيك أوف","PTO"], driverid:["هوية السائق","Driver ID"], servicedistance:["مسافة الصيانة القادمة","Service distance"],
+};
+function custSignals(list){
+  const out = [];
+  for(const s of list || []){
+    const k = String(s).toLowerCase().replace(/\(j19\d\d\)|\*/g, "").replace(/[^a-z]+/g, "");
+    const t = SIG_CUST[k];
+    if(t && !out.includes(t[L()])) out.push(t[L()]);
+  }
+  return out;
+}
+/* What can go to the customer. Configuration names are typed by people
+   and carry other customers' names ("khalidi-man-lx45"), device counts
+   describe other people's fleets -- none of that leaves the building. */
+function customerRows(res){
+  const sep = state.lang === "ar" ? "\u060c " : ", ";
+  return [[T("bxN"), T("bcMake"), T("bcModel"), T("bcYear"), T("bxDec"), T("bcSigAv"),
+           T("bxCs"), T("bxNote")],
+    ...res.map((r, i) => [i + 1, r.mk || r.in.mk, r.md || r.in.md, r.yr || r.in.yr,
+      T(DEC[r.dec]),
+      custSignals((r.sig && r.sig.length ? r.sig : []).concat(r.cat || [])).join(sep),
+      r.cs ? T("cDoorYes") : "",
+      T(r.dec === "yes" ? "cYes" : r.dec === "trial" ? "cTrial" : "cNo")])];
+}
+function summaryRows(res){
+  const c = k => res.filter(r => r.dec === k).length;
+  const age = liveAge();
+  return [[T("bsHead"), ""],
+    [T("dYes"), c("yes")], [T("dTrial"), c("trial")], [T("dNo"), c("no")],
+    [T("bsCheck"), res.filter(r => r.how === "close" || r.how === "none").length],
+    [T("bsTotal"), res.length], ["", ""],
+    [T("bsData"), (state.meta && state.meta.generated_at) || ""],
+    [T("bsLive"), liveDate() + (age !== null && age > 3 ? " \u2014 " + T("bsOld", {d: age}) : "")]];
+}
+function batchMsg(t, bad){
+  const el = $("b-msg");
+  if(el){ el.textContent = t; el.className = "bmsg" + (bad ? " bad" : ""); }
+}
+async function runBatch(file){
+  batchMsg(T("bReading"));
+  let rows;
+  try{ rows = await readSheet(file); }
+  catch(e){ return batchMsg(e.message === "xlsx" ? T("bNoLib") : T("bBad"), true); }
+  if(!rows.length) return batchMsg(T("bEmpty"), true);
+  state.batch = {name: file.name.replace(/\.[^.]+$/, ""), res: rows.map(judgeRow), only: ""};
+  batchMsg("");
+  paintBatch();
+}
+async function downloadBatch(){
+  const b = state.batch;
+  if(!b) return;
+  let XLSX;
+  try{ XLSX = await needXlsx(); }catch{ return batchMsg(T("bNoLib"), true); }
+  bookOut(XLSX, [
+    sheetOut(XLSX, T("bShCust"), customerRows(b.res), [5, 16, 20, 8, 14, 60, 16, 70]),
+    sheetOut(XLSX, T("bShTech"), batchRows(b.res),
+      [5, 14, 18, 8, 12, 14, 18, 14, 14, 46, 24, 12, 11, 9, 34, 14, 26, 50, 16, 60, 22]),
+    sheetOut(XLSX, T("bShSum"), summaryRows(b.res), [34, 30])],
+    `canval-${b.name}-${new Date().toISOString().slice(0, 10)}.xlsx`);
+}
+function batchPanel(){
+  const age = liveAge();
+  $("p-batch").innerHTML = `<p class="lead">${esc(T("bLead"))}</p>
+    <div class="bbar">
+      <button type="button" class="tool" id="b-tpl">${esc(T("bTpl"))}</button>
+      <label class="tool bup" for="b-file">${esc(T("bUp"))}</label>
+      <input type="file" id="b-file" accept=".xlsx,.xls,.csv" hidden>
+      <button type="button" class="tool" id="b-dl" ${state.batch ? "" : "hidden"}>${esc(T("bDl"))}</button>
+    </div>
+    ${age !== null && age > 3 ? `<div class="bmsg bad">${esc(T("bStale", {d: liveDate()}))}</div>` : ""}
+    <div class="note">${esc(T("bTechNote"))}</div>
+    <div id="b-msg" class="bmsg"></div><div id="b-out"></div>`;
+  $("b-tpl").onclick = downloadTemplate;
+  $("b-dl").onclick = downloadBatch;
+  $("b-file").onchange = e => { const f = e.target.files && e.target.files[0]; if(f) runBatch(f); e.target.value = ""; };
+  if(state.batch) paintBatch();
+}
+function paintBatch(){
+  const b = state.batch, out = $("b-out");
+  if(!b || !out) return;
+  $("b-dl").hidden = false;
+  const c = k => b.res.filter(r => r.dec === k).length;
+  const chk = b.res.filter(r => r.how === "close" || r.how === "none").length;
+  const flt = [["", T("bAll"), b.res.length], ["yes", T("dYes"), c("yes")],
+               ["trial", T("dTrial"), c("trial")], ["no", T("dNo"), c("no")],
+               ["check", T("bsCheck"), chk]];
+  const shown = b.res.map((r, i) => [r, i]).filter(([r]) => !b.only
+    || (b.only === "check" ? (r.how === "close" || r.how === "none") : r.dec === b.only));
+  out.innerHTML = `<div class="bsum">${flt.map(([k, l, n]) =>
+      `<button type="button" class="bf ${k || "all"}${b.only === k ? " on" : ""}" data-bf="${k}"><b>${n}</b> ${esc(l)}</button>`).join("")}</div>
+    <div class="blist">${shown.map(([r, i]) => {
+      const rc = r.rc;
+      return `<div class="brow">
+        <span class="bn">${i + 1}</span>
+        <div class="bin"><div class="t">${bdi([r.in.mk, r.in.md].filter(Boolean).join(" "))}${
+          r.yr ? ` <span class="by">${r.yr}</span>` : ""}</div>
+          <div class="d">${r.mk ? T("bSaw") + " " + bdi([r.mk, r.md].filter(Boolean).join(" ")) : ""}
+            <span class="bh ${r.how}">${esc(T(HOW[r.how]))}</span>${
+            r.alts && r.alts.length ? ` <span class="ba">${esc(T("bAlt"))} ${r.alts.map(bdi).join(" \u00b7 ")}</span>` : ""}</div></div>
+        <div class="bdec"><span class="pill ${r.dec}">${esc(T(DEC[r.dec]))}</span>
+          <div class="d">${esc(r.why)}</div>${
+          rc ? `<div class="d mono">${bdi(rc.f.n)}${rc.cfg ? " \u2192 " + bdi(rc.cfg.nm) : ""}${
+            rc.cfg && rc.cfg.hw ? " \u00b7 " + bdi(rc.cfg.hw) : ""}</div>` : ""}${
+          r.in.dev && rc ? `<div class="d">${esc(hwFit(rc.f, r.in.dev))}</div>` : ""}</div>
+        ${r.mk && r.md ? `<button type="button" class="tool bo" data-bo="${i}">${esc(T("bOpen"))}</button>` : "<span></span>"}
+      </div>`; }).join("")}</div>`;
+  out.onclick = e => {
+    const fb = e.target.closest && e.target.closest("[data-bf]");
+    if(fb){ b.only = fb.dataset.bf; paintBatch(); return; }
+    const ob = e.target.closest && e.target.closest("[data-bo]");
+    if(!ob) return;
+    const r = b.res[+ob.dataset.bo];
+    $("mk").value = r.mk; state.models = modelsOf(r.mk);
+    $("md").value = r.md; $("md").disabled = false;
+    state.years = yearsOf(filesFor(r.mk, r.md));
+    $("yr").value = r.yr ? String(r.yr) : ""; $("yr").disabled = false;
+    state.pick = {mk: r.mk, md: r.md, yr: r.yr || null}; state.free = "";
+    $("free").value = ""; state.cardOn = null;
+    renderPick(); syncCards();
+    $("out").scrollIntoView({behavior: "smooth", block: "start"});
+  };
+}
 
 /* ==================================================================
    The manual. Written as data rather than markup so the same source

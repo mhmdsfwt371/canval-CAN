@@ -144,6 +144,36 @@ def export_vehicles(conn) -> list[dict]:
                       AND ac.family IN ('lock','unlock')"""):
             cmd_names.setdefault(r["fid"], []).append(r["nm"])
 
+    # Which configuration names carry each file, and on which hardware.
+    # Sales asked for this in so many words: "the car is supported" is
+    # only half an answer until it comes with "on this device, with this
+    # configuration". The four names with the most devices per file are
+    # enough to name the proven setup without publishing the long tail.
+    cfs: dict[int, list] = {}
+    hws: dict[int, list] = {}
+    for r in conn.execute(
+            """SELECT file_id fid, config_name nm,
+                      COALESCE(hardware, '') hw, COUNT(DISTINCT imei) n
+                 FROM device_can
+                WHERE file_id IS NOT NULL
+                  AND config_name IS NOT NULL AND config_name != ''
+                GROUP BY file_id, config_name, hardware
+                ORDER BY n DESC, nm"""):
+        slot = cfs.setdefault(r["fid"], [])
+        if len(slot) < 4:
+            slot.append([r["nm"], r["hw"] or None, r["n"]])
+    for r in conn.execute(
+            """SELECT file_id fid, COALESCE(hardware, '') hw,
+                      COUNT(DISTINCT imei) n
+                 FROM device_can
+                WHERE file_id IS NOT NULL
+                GROUP BY file_id, hardware
+                ORDER BY n DESC"""):
+        if r["hw"]:
+            slot = hws.setdefault(r["fid"], [])
+            if len(slot) < 5:
+                slot.append([r["hw"], r["n"]])
+
     fitted, active, configs = {}, {}, {}
     for r in conn.execute(
             f"""SELECT file_id, COUNT(DISTINCT imei) n,
@@ -186,6 +216,10 @@ def export_vehicles(conn) -> list[dict]:
             entry["g"] = 1
         if row["file_id"] in live:
             entry["lv"] = live[row["file_id"]]
+        if cfs.get(row["file_id"]):
+            entry["cf"] = cfs[row["file_id"]]
+        if hws.get(row["file_id"]):
+            entry["hw"] = hws[row["file_id"]]
         if locks.get(row["file_id"]):
             entry["sc"] = {"n": locks[row["file_id"]],
                            "s": sorted(lock_names.get(row["file_id"], []))[:4]}
@@ -270,6 +304,7 @@ def export_crossfits(conn) -> list[dict]:
     for r in conn.execute(
             f"""SELECT d.config_name nm, d.file_id fid, f.name fl,
                        f.make mk, f.model md,
+                       MAX(d.hardware) hw,
                        COUNT(DISTINCT d.imei) n,
                        COUNT(DISTINCT CASE WHEN {_active_expr()}
                                            THEN d.imei END) a
@@ -293,6 +328,8 @@ def export_crossfits(conn) -> list[dict]:
             entry["a"] = r["a"]
         if r["mk"]:
             entry["fmk"] = r["mk"]
+        if r["hw"]:
+            entry["hw"] = r["hw"]
         out.append(entry)
     return out[:1500]
 
