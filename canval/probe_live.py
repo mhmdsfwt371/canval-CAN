@@ -42,8 +42,8 @@ import os
 import time
 from collections import defaultdict
 
-from .afaqy import BASE_URL
-from .afaqy_auth import get_token, parse_unit_view
+from .afaqy import BASE_URL, parse_unit_view
+from .afaqy_auth import get_token
 from .store import connect
 
 SCHEMA = """

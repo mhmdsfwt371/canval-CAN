@@ -7,6 +7,8 @@
 <!-- Preview and icon are drawn here rather than fetched: a shared link
      should show something recognisable without the repository carrying
      image files that then have to be kept in step with the design. -->
+<meta name="author" content="Mohamed Safwat">
+<meta name="generator" content="canval — designed and built by Mohamed Safwat, first released 2026-08-04">
 <meta name="description" content="هل العربية دي مدعومة؟ إجابة من كتالوج ملفات الكان ومن الأجهزة المركّبة فعلًا في الأسطول.">
 <meta property="og:title" content="canval — دعم الكان">
 <meta property="og:description" content="هل العربية دي مدعومة؟ إجابة من كتالوج ملفات الكان ومن الأجهزة المركّبة فعلًا في الأسطول.">
@@ -505,6 +507,11 @@ bdi{unicode-bidi:isolate}
   margin-top:2px;word-break:break-all}
 footer{border-top:1px solid var(--line);padding:16px 0 40px;font-size:13px;
   color:var(--muted)}
+.credit{margin-top:12px;padding-top:10px;border-top:1px dashed var(--line);display:flex;
+  flex-wrap:wrap;gap:4px 10px;align-items:baseline}
+.credit .pw{font-family:var(--mono);direction:ltr;unicode-bidi:isolate}
+.credit .pw b{color:var(--ink)}
+.credit [data-t="credit"]{color:var(--ink);font-weight:600}
 @media(prefers-reduced-motion:no-preference){
   .verdict,.list{animation:rise .2s ease-out both}
   @keyframes rise{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
@@ -613,6 +620,8 @@ footer{border-top:1px solid var(--line);padding:16px 0 40px;font-size:13px;
 <footer class="wrap">
   <div id="stamp"></div>
   <div data-t="footNote"></div>
+  <div class="credit"><span class="pw">Powered by <b>canval</b></span>
+    <span data-t="credit"></span> <span class="since" id="since"></span></div>
 </footer>
 
 <script>
@@ -624,7 +633,7 @@ const esc = s => (s ?? "").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;")
    the page may be Arabic, and only an isolate keeps them whole. */
 const bdi = s => `<bdi dir="${/[\u0600-\u06FF]/.test(s ?? "") ? "rtl" : "ltr"}">${esc(s)}</bdi>`;
 const THIS_YEAR = new Date().getFullYear();
-const VERSION = "3.15";
+const VERSION = "3.16";
 const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"ar"};
 
 /* What changed, and when. Kept beside the code rather than in a document
@@ -848,6 +857,9 @@ const STR = {
   rNoModel:   ["الموديل مش موجود تحت الماركة دي في الكتالوج، ومفيش تركيب سابق باسمه.", "The model is not listed under this make and has no previous install."],
   hwSame:     ["اتركب على نفس الجهاز ({h})", "Fitted on the same device ({h})"],
   hwOther:    ["اتركب على أجهزة تانية: {h}", "Fitted on other devices: {h}"],
+  credit:     ["فكرة وتصميم وتطوير: م. محمد صفوت", "Designed and built by Mohamed Safwat"],
+  since:      ["أول إصدار ٤ أغسطس ٢٠٢٦ · الإصدار الحالي {v}", "First released 4 Aug 2026 · current version {v}"],
+  bsBy:       ["أُعدّ بواسطة canval — تصميم وتطوير م. محمد صفوت", "Produced by canval — designed and built by Mohamed Safwat"],
   footNote:   ["عرض آخر الأجهزة المحدّثة جاي مع تسجيل الدخول.",
                "Showing the latest reporting devices needs sign-in; that comes next."],
   stamp:      ["آخر تحديث للبيانات:", "Data last refreshed:"],
@@ -2268,6 +2280,7 @@ function panels(){
       return d !== null && d > 3 ? `<div class="gauge stale" title="${esc(liveDate())}">${
         T("gStale", {d})}</div>` : ""; })()}`;
   batchPanel();
+  if($("since")) $("since").textContent = T("since", {v: VERSION});
 
   $("p-fleet").innerHTML = `<p class="lead">${esc(T("fleetLead"))}</p>
     <div class="list">${f.estate.map(r => `<div class="row">
@@ -2834,6 +2847,9 @@ function bookOut(XLSX, sheets, file){
   const wb = XLSX.utils.book_new();
   for(const [n, ws] of sheets) XLSX.utils.book_append_sheet(wb, ws, n);
   wb.Workbook = {Views: [{RTL: state.lang === "ar"}]};
+  wb.Props = {Title: "canval", Subject: "CAN support check", Author: "Mohamed Safwat",
+              Company: "canval", Comments: "canval v" + VERSION + " — designed and built by Mohamed Safwat",
+              CreatedDate: new Date()};
   XLSX.writeFile(wb, file);
 }
 async function downloadTemplate(){
@@ -2975,7 +2991,8 @@ function summaryRows(res){
     [T("bsCheck"), res.filter(r => r.how === "close" || r.how === "none").length],
     [T("bsTotal"), res.length], ["", ""],
     [T("bsData"), (state.meta && state.meta.generated_at) || ""],
-    [T("bsLive"), liveDate() + (age !== null && age > 3 ? " \u2014 " + T("bsOld", {d: age}) : "")]];
+    [T("bsLive"), liveDate() + (age !== null && age > 3 ? " \u2014 " + T("bsOld", {d: age}) : "")],
+    ["", ""], [T("bsBy"), "canval v" + VERSION]];
 }
 function batchMsg(t, bad){
   const el = $("b-msg");
@@ -3207,7 +3224,7 @@ h3{font-size:17px;margin:26px 0 6px;border-bottom:1px solid #ddd;padding-bottom:
 .relh{display:flex;gap:10px;align-items:baseline}.relh b{font:600 14px monospace}
 .relh span{font:11px monospace;color:#888}
 footer{margin-top:34px;color:#777;font-size:13px}</style>
-${guideHTML()}<footer>canval v${VERSION} — ${esc(state.meta ? state.meta.generated_at : "")}</footer>
+${guideHTML()}<footer>canval v${VERSION} — ${esc(state.meta ? state.meta.generated_at : "")} — ${esc(T("credit"))}</footer>
 </html>`;
   const url = URL.createObjectURL(new Blob([page], {type:"text/html;charset=utf-8"}));
   const a = document.createElement("a");
