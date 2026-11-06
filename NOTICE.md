@@ -1,6 +1,6 @@
 # canval — authorship record
 
-**canval** was conceived, designed and built by **Mohamed Safwat**
+**canval** was conceived, designed and built by **Eng. Mohamed Safwat** (م. محمد صفوت)
 (GitHub: [mhmdsfwt371](https://github.com/mhmdsfwt371)).
 
 | | |
@@ -27,9 +27,9 @@
 1. The full git history of this repository: every change, its date and
    its author, from the first commit above.
 2. The page itself: author metadata in the HTML head, and the
-   "Powered by canval — designed and built by Mohamed Safwat" line in the
+   "Powered by canval — designed and built by Eng. Mohamed Safwat" line in the
    footer and in every printed manual.
-3. Every Excel file the tool produces carries Author = Mohamed Safwat in
+3. Every Excel file the tool produces carries Author = Eng. Mohamed Safwat in
    its document properties and a credit line on the summary sheet.
 
 This file records authorship. It does not state who owns the rights in

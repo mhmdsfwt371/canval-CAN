@@ -7,8 +7,8 @@
 <!-- Preview and icon are drawn here rather than fetched: a shared link
      should show something recognisable without the repository carrying
      image files that then have to be kept in step with the design. -->
-<meta name="author" content="Mohamed Safwat">
-<meta name="generator" content="canval — designed and built by Mohamed Safwat, first released 2026-08-04">
+<meta name="author" content="Eng. Mohamed Safwat">
+<meta name="generator" content="canval — designed and built by Eng. Mohamed Safwat, first released 2026-08-04">
 <meta name="description" content="هل العربية دي مدعومة؟ إجابة من كتالوج ملفات الكان ومن الأجهزة المركّبة فعلًا في الأسطول.">
 <meta property="og:title" content="canval — دعم الكان">
 <meta property="og:description" content="هل العربية دي مدعومة؟ إجابة من كتالوج ملفات الكان ومن الأجهزة المركّبة فعلًا في الأسطول.">
@@ -633,7 +633,7 @@ const esc = s => (s ?? "").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;")
    the page may be Arabic, and only an isolate keeps them whole. */
 const bdi = s => `<bdi dir="${/[\u0600-\u06FF]/.test(s ?? "") ? "rtl" : "ltr"}">${esc(s)}</bdi>`;
 const THIS_YEAR = new Date().getFullYear();
-const VERSION = "3.16";
+const VERSION = "3.17";
 const state = {v:[], cfg:[], fleet:null, meta:null, makes:[], models:[], lang:"ar"};
 
 /* What changed, and when. Kept beside the code rather than in a document
@@ -857,9 +857,9 @@ const STR = {
   rNoModel:   ["الموديل مش موجود تحت الماركة دي في الكتالوج، ومفيش تركيب سابق باسمه.", "The model is not listed under this make and has no previous install."],
   hwSame:     ["اتركب على نفس الجهاز ({h})", "Fitted on the same device ({h})"],
   hwOther:    ["اتركب على أجهزة تانية: {h}", "Fitted on other devices: {h}"],
-  credit:     ["فكرة وتصميم وتطوير: م. محمد صفوت", "Designed and built by Mohamed Safwat"],
+  credit:     ["فكرة وتصميم وتطوير: م. محمد صفوت", "Designed and built by Eng. Mohamed Safwat"],
   since:      ["أول إصدار ٤ أغسطس ٢٠٢٦ · الإصدار الحالي {v}", "First released 4 Aug 2026 · current version {v}"],
-  bsBy:       ["أُعدّ بواسطة canval — تصميم وتطوير م. محمد صفوت", "Produced by canval — designed and built by Mohamed Safwat"],
+  bsBy:       ["أُعدّ بواسطة canval — تصميم وتطوير م. محمد صفوت", "Produced by canval — designed and built by Eng. Mohamed Safwat"],
   footNote:   ["عرض آخر الأجهزة المحدّثة جاي مع تسجيل الدخول.",
                "Showing the latest reporting devices needs sign-in; that comes next."],
   stamp:      ["آخر تحديث للبيانات:", "Data last refreshed:"],
@@ -2847,8 +2847,8 @@ function bookOut(XLSX, sheets, file){
   const wb = XLSX.utils.book_new();
   for(const [n, ws] of sheets) XLSX.utils.book_append_sheet(wb, ws, n);
   wb.Workbook = {Views: [{RTL: state.lang === "ar"}]};
-  wb.Props = {Title: "canval", Subject: "CAN support check", Author: "Mohamed Safwat",
-              Company: "canval", Comments: "canval v" + VERSION + " — designed and built by Mohamed Safwat",
+  wb.Props = {Title: "canval", Subject: "CAN support check", Author: "Eng. Mohamed Safwat",
+              Company: "canval", Comments: "canval v" + VERSION + " — designed and built by Eng. Mohamed Safwat",
               CreatedDate: new Date()};
   XLSX.writeFile(wb, file);
 }
